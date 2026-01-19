@@ -1,0 +1,411 @@
+// Database types for VindycAItion
+// These types mirror the Supabase database schema
+
+export type Json =
+    | string
+    | number
+    | boolean
+    | null
+    | { [key: string]: Json | undefined }
+    | Json[];
+
+export type Database = {
+    public: {
+        Tables: {
+            profiles: {
+                Row: {
+                    id: string;
+                    email: string;
+                    full_name: string | null;
+                    company_name: string;
+                    company_nip: string | null;
+                    company_address: string | null;
+                    company_city: string | null;
+                    company_postal_code: string | null;
+                    company_phone: string | null;
+                    company_email: string | null;
+                    bank_account_number: string | null;
+                    bank_name: string | null;
+                    default_sequence_id: string | null;
+                    send_thank_you_on_payment: boolean;
+                    interest_rate: number;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id: string;
+                    email: string;
+                    full_name?: string | null;
+                    company_name: string;
+                    company_nip?: string | null;
+                    company_address?: string | null;
+                    company_city?: string | null;
+                    company_postal_code?: string | null;
+                    company_phone?: string | null;
+                    company_email?: string | null;
+                    bank_account_number?: string | null;
+                    bank_name?: string | null;
+                    default_sequence_id?: string | null;
+                    send_thank_you_on_payment?: boolean;
+                    interest_rate?: number;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    email?: string;
+                    full_name?: string | null;
+                    company_name?: string;
+                    company_nip?: string | null;
+                    company_address?: string | null;
+                    company_city?: string | null;
+                    company_postal_code?: string | null;
+                    company_phone?: string | null;
+                    company_email?: string | null;
+                    bank_account_number?: string | null;
+                    bank_name?: string | null;
+                    default_sequence_id?: string | null;
+                    send_thank_you_on_payment?: boolean;
+                    interest_rate?: number;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            sequences: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    name: string;
+                    description: string | null;
+                    is_default: boolean;
+                    is_system: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    name: string;
+                    description?: string | null;
+                    is_default?: boolean;
+                    is_system?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    name?: string;
+                    description?: string | null;
+                    is_default?: boolean;
+                    is_system?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            sequence_steps: {
+                Row: {
+                    id: string;
+                    sequence_id: string;
+                    step_order: number;
+                    days_offset: number;
+                    channel: 'email' | 'sms' | 'both';
+                    email_subject: string | null;
+                    email_body: string;
+                    sms_body: string | null;
+                    include_payment_link: boolean;
+                    include_interest: boolean;
+                    is_ai_generated: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    sequence_id: string;
+                    step_order: number;
+                    days_offset: number;
+                    channel: 'email' | 'sms' | 'both';
+                    email_subject?: string | null;
+                    email_body: string;
+                    sms_body?: string | null;
+                    include_payment_link?: boolean;
+                    include_interest?: boolean;
+                    is_ai_generated?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    sequence_id?: string;
+                    step_order?: number;
+                    days_offset?: number;
+                    channel?: 'email' | 'sms' | 'both';
+                    email_subject?: string | null;
+                    email_body?: string;
+                    sms_body?: string | null;
+                    include_payment_link?: boolean;
+                    include_interest?: boolean;
+                    is_ai_generated?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            debtors: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    name: string;
+                    nip: string | null;
+                    email: string | null;
+                    phone: string | null;
+                    address: string | null;
+                    city: string | null;
+                    postal_code: string | null;
+                    contact_person: string | null;
+                    default_sequence_id: string | null;
+                    payment_score: number;
+                    total_invoices: number;
+                    paid_on_time: number;
+                    paid_late: number;
+                    unpaid: number;
+                    total_debt: number;
+                    overdue_debt: number;
+                    notes: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    name: string;
+                    nip?: string | null;
+                    email?: string | null;
+                    phone?: string | null;
+                    address?: string | null;
+                    city?: string | null;
+                    postal_code?: string | null;
+                    contact_person?: string | null;
+                    default_sequence_id?: string | null;
+                    payment_score?: number;
+                    total_invoices?: number;
+                    paid_on_time?: number;
+                    paid_late?: number;
+                    unpaid?: number;
+                    total_debt?: number;
+                    overdue_debt?: number;
+                    notes?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    name?: string;
+                    nip?: string | null;
+                    email?: string | null;
+                    phone?: string | null;
+                    address?: string | null;
+                    city?: string | null;
+                    postal_code?: string | null;
+                    contact_person?: string | null;
+                    default_sequence_id?: string | null;
+                    payment_score?: number;
+                    total_invoices?: number;
+                    paid_on_time?: number;
+                    paid_late?: number;
+                    unpaid?: number;
+                    total_debt?: number;
+                    overdue_debt?: number;
+                    notes?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            invoices: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    debtor_id: string;
+                    invoice_number: string;
+                    issue_date: string;
+                    due_date: string;
+                    amount: number;
+                    currency: string;
+                    description: string | null;
+                    amount_paid: number;
+                    paid_at: string | null;
+                    status: 'pending' | 'partial' | 'paid' | 'overdue' | 'paused' | 'written_off';
+                    sequence_id: string | null;
+                    sequence_status: 'active' | 'paused' | 'completed' | 'stopped';
+                    current_step_index: number;
+                    sequence_paused_at: string | null;
+                    sequence_paused_until: string | null;
+                    days_overdue: number;
+                    interest_amount: number;
+                    payment_link: string | null;
+                    payment_link_expires_at: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    debtor_id: string;
+                    invoice_number: string;
+                    issue_date: string;
+                    due_date: string;
+                    amount: number;
+                    currency?: string;
+                    description?: string | null;
+                    amount_paid?: number;
+                    paid_at?: string | null;
+                    status?: 'pending' | 'partial' | 'paid' | 'overdue' | 'paused' | 'written_off';
+                    sequence_id?: string | null;
+                    sequence_status?: 'active' | 'paused' | 'completed' | 'stopped';
+                    current_step_index?: number;
+                    sequence_paused_at?: string | null;
+                    sequence_paused_until?: string | null;
+                    interest_amount?: number;
+                    payment_link?: string | null;
+                    payment_link_expires_at?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    debtor_id?: string;
+                    invoice_number?: string;
+                    issue_date?: string;
+                    due_date?: string;
+                    amount?: number;
+                    currency?: string;
+                    description?: string | null;
+                    amount_paid?: number;
+                    paid_at?: string | null;
+                    status?: 'pending' | 'partial' | 'paid' | 'overdue' | 'paused' | 'written_off';
+                    sequence_id?: string | null;
+                    sequence_status?: 'active' | 'paused' | 'completed' | 'stopped';
+                    current_step_index?: number;
+                    sequence_paused_at?: string | null;
+                    sequence_paused_until?: string | null;
+                    interest_amount?: number;
+                    payment_link?: string | null;
+                    payment_link_expires_at?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            collection_actions: {
+                Row: {
+                    id: string;
+                    invoice_id: string | null;
+                    installment_id: string | null;
+                    user_id: string;
+                    action_type: string;
+                    sequence_step_id: string | null;
+                    channel: string | null;
+                    email_subject: string | null;
+                    content: string | null;
+                    recipient_email: string | null;
+                    recipient_phone: string | null;
+                    status: 'draft' | 'scheduled' | 'sent' | 'delivered' | 'failed';
+                    sent_at: string | null;
+                    error_message: string | null;
+                    metadata: Json | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    invoice_id?: string | null;
+                    installment_id?: string | null;
+                    user_id: string;
+                    action_type: string;
+                    sequence_step_id?: string | null;
+                    channel?: string | null;
+                    email_subject?: string | null;
+                    content?: string | null;
+                    recipient_email?: string | null;
+                    recipient_phone?: string | null;
+                    status?: 'draft' | 'scheduled' | 'sent' | 'delivered' | 'failed';
+                    sent_at?: string | null;
+                    error_message?: string | null;
+                    metadata?: Json | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    invoice_id?: string | null;
+                    installment_id?: string | null;
+                    user_id?: string;
+                    action_type?: string;
+                    sequence_step_id?: string | null;
+                    channel?: string | null;
+                    email_subject?: string | null;
+                    content?: string | null;
+                    recipient_email?: string | null;
+                    recipient_phone?: string | null;
+                    status?: 'draft' | 'scheduled' | 'sent' | 'delivered' | 'failed';
+                    sent_at?: string | null;
+                    error_message?: string | null;
+                    metadata?: Json | null;
+                    created_at?: string;
+                };
+            };
+            scheduled_steps: {
+                Row: {
+                    id: string;
+                    invoice_id: string | null;
+                    installment_id: string | null;
+                    sequence_step_id: string;
+                    scheduled_for: string;
+                    status: 'pending' | 'executed' | 'skipped' | 'cancelled';
+                    executed_at: string | null;
+                    created_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    invoice_id?: string | null;
+                    installment_id?: string | null;
+                    sequence_step_id: string;
+                    scheduled_for: string;
+                    status?: 'pending' | 'executed' | 'skipped' | 'cancelled';
+                    executed_at?: string | null;
+                    created_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    invoice_id?: string | null;
+                    installment_id?: string | null;
+                    sequence_step_id?: string;
+                    scheduled_for?: string;
+                    status?: 'pending' | 'executed' | 'skipped' | 'cancelled';
+                    executed_at?: string | null;
+                    created_at?: string;
+                };
+            };
+        };
+    };
+};
+
+// Convenience types
+export type Profile = Database['public']['Tables']['profiles']['Row'];
+export type Sequence = Database['public']['Tables']['sequences']['Row'];
+export type SequenceStep = Database['public']['Tables']['sequence_steps']['Row'];
+export type Debtor = Database['public']['Tables']['debtors']['Row'];
+export type Invoice = Database['public']['Tables']['invoices']['Row'];
+export type CollectionAction = Database['public']['Tables']['collection_actions']['Row'];
+export type ScheduledStep = Database['public']['Tables']['scheduled_steps']['Row'];
+
+// Insert types
+export type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
+export type SequenceInsert = Database['public']['Tables']['sequences']['Insert'];
+export type SequenceStepInsert = Database['public']['Tables']['sequence_steps']['Insert'];
+export type DebtorInsert = Database['public']['Tables']['debtors']['Insert'];
+export type InvoiceInsert = Database['public']['Tables']['invoices']['Insert'];
+
+// Update types
+export type ProfileUpdate = Database['public']['Tables']['profiles']['Update'];
+export type SequenceUpdate = Database['public']['Tables']['sequences']['Update'];
+export type DebtorUpdate = Database['public']['Tables']['debtors']['Update'];
+export type InvoiceUpdate = Database['public']['Tables']['invoices']['Update'];
