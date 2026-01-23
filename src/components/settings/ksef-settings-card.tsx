@@ -365,40 +365,19 @@ export function KSeFSettingsCard() {
                                     />
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label>Częstotliwość synchronizacji</Label>
-                                    <Select
-                                        value={formData.sync_frequency}
-                                        onValueChange={(value: SyncFrequency) =>
-                                            setFormData({ ...formData, sync_frequency: value })
-                                        }
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="daily">Codziennie</SelectItem>
-                                            <SelectItem value="manual">Ręcznie</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-
-                                {formData.sync_frequency === 'daily' && (
-                                    <div className="space-y-2">
-                                        <Label>Godzina synchronizacji</Label>
-                                        <Input
-                                            type="time"
-                                            value={formData.sync_time}
-                                            onChange={(e) =>
-                                                setFormData({ ...formData, sync_time: e.target.value })
-                                            }
-                                            className="w-32"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Faktury będą importowane codziennie o tej godzinie
-                                        </p>
+                                {/* Info o automatycznej synchronizacji */}
+                                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 text-sm border border-blue-200 dark:border-blue-900">
+                                    <div className="flex items-center gap-2">
+                                        <RefreshCw className="h-4 w-4 text-blue-600" />
+                                        <span className="font-medium text-blue-700 dark:text-blue-400">
+                                            Automatyczna synchronizacja: codziennie o 7:00
+                                        </span>
                                     </div>
-                                )}
+                                    <p className="text-xs text-blue-600/80 dark:text-blue-400/80 mt-1">
+                                        Faktury z KSeF są pobierane automatycznie raz dziennie.
+                                        Możesz też pobrać ręcznie klikając przycisk poniżej.
+                                    </p>
+                                </div>
 
                                 <div className="flex items-center justify-between">
                                     <div>
