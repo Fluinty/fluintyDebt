@@ -171,6 +171,9 @@ export type Database = {
                     total_debt: number;
                     overdue_debt: number;
                     notes: string | null;
+                    auto_send_enabled: boolean;
+                    preferred_send_time: string;
+                    preferred_channel: 'email' | 'sms' | 'both';
                     created_at: string;
                     updated_at: string;
                 };
@@ -194,6 +197,9 @@ export type Database = {
                     total_debt?: number;
                     overdue_debt?: number;
                     notes?: string | null;
+                    auto_send_enabled?: boolean;
+                    preferred_send_time?: string;
+                    preferred_channel?: 'email' | 'sms' | 'both';
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -217,6 +223,9 @@ export type Database = {
                     total_debt?: number;
                     overdue_debt?: number;
                     notes?: string | null;
+                    auto_send_enabled?: boolean;
+                    preferred_send_time?: string;
+                    preferred_channel?: 'email' | 'sms' | 'both';
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -244,6 +253,8 @@ export type Database = {
                     interest_amount: number;
                     payment_link: string | null;
                     payment_link_expires_at: string | null;
+                    auto_send_enabled: boolean;
+                    send_time: string;
                     created_at: string;
                     updated_at: string;
                 };
@@ -268,6 +279,8 @@ export type Database = {
                     interest_amount?: number;
                     payment_link?: string | null;
                     payment_link_expires_at?: string | null;
+                    auto_send_enabled?: boolean;
+                    send_time?: string;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -292,6 +305,8 @@ export type Database = {
                     interest_amount?: number;
                     payment_link?: string | null;
                     payment_link_expires_at?: string | null;
+                    auto_send_enabled?: boolean;
+                    send_time?: string;
                     created_at?: string;
                     updated_at?: string;
                 };

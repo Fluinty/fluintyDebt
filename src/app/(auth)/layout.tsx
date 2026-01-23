@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-    title: 'VindycAItion - Logowanie',
-    description: 'Zaloguj się do platformy VindycAItion',
+    title: 'FluintyDebt - Logowanie',
+    description: 'Zaloguj się do platformy FluintyDebt',
 };
 
 export default function AuthLayout({
@@ -15,7 +15,7 @@ export default function AuthLayout({
             {/* Left side - Branding */}
             <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 text-white p-12 flex-col justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">VindycAItion</h1>
+                    <h1 className="text-3xl font-bold">FluintyDebt</h1>
                     <p className="text-primary-200 mt-1">AI-powered debt collection</p>
                 </div>
 
@@ -49,7 +49,7 @@ export default function AuthLayout({
                 </div>
 
                 <p className="text-primary-400 text-sm">
-                    © 2026 VindycAItion. Wszystkie prawa zastrzeżone.
+                    © 2026 FluintyDebt. Wszystkie prawa zastrzeżone.
                 </p>
             </div>
 

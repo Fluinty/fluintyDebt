@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
@@ -13,6 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -27,20 +34,50 @@ const debtorSchema = z.object({
     postal_code: z.string().optional(),
     contact_person: z.string().optional(),
     notes: z.string().optional(),
+    default_sequence_id: z.string().optional(),
+    auto_send_enabled: z.boolean().optional(),
+    preferred_send_time: z.string().optional(),
+    preferred_channel: z.string().optional(),
 });
 
 type DebtorFormData = z.infer<typeof debtorSchema>;
 
+interface Sequence {
+    id: string;
+    name: string;
+    description: string | null;
+}
+
 export default function NewDebtorPage() {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const [sequences, setSequences] = useState<Sequence[]>([]);
+
+    // Load sequences
+    useEffect(() => {
+        async function loadSequences() {
+            const supabase = createClient();
+            const { data } = await supabase
+                .from('sequences')
+                .select('id, name, description')
+                .order('name');
+            if (data) setSequences(data);
+        }
+        loadSequences();
+    }, []);
 
     const {
         register,
         handleSubmit,
+        setValue,
         formState: { errors },
     } = useForm<DebtorFormData>({
         resolver: zodResolver(debtorSchema),
+        defaultValues: {
+            auto_send_enabled: true,
+            preferred_send_time: '10:00',
+            preferred_channel: 'email',
+        },
     });
 
     const onSubmit = async (data: DebtorFormData) => {
@@ -68,6 +105,10 @@ export default function NewDebtorPage() {
                 postal_code: data.postal_code || null,
                 contact_person: data.contact_person || null,
                 notes: data.notes || null,
+                default_sequence_id: data.default_sequence_id || null,
+                auto_send_enabled: data.auto_send_enabled ?? true,
+                preferred_send_time: data.preferred_send_time || '10:00',
+                preferred_channel: data.preferred_channel || 'email',
             });
 
             if (error) {
@@ -246,6 +287,73 @@ export default function NewDebtorPage() {
                                             Anuluj
                                         </Button>
                                     </Link>
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Auto-send defaults */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Ustawienia domyślne</CardTitle>
+                                <CardDescription>
+                                    Domyślne ustawienia dla nowych faktur
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="auto_send_enabled">Automatyczne wysyłanie</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Domyślnie włącz auto-wysyłanie dla faktur
+                                        </p>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        id="auto_send_enabled"
+                                        defaultChecked
+                                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                                        {...register('auto_send_enabled')}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="preferred_send_time">Preferowana godzina wysyłki</Label>
+                                    <Input
+                                        id="preferred_send_time"
+                                        type="time"
+                                        {...register('preferred_send_time')}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="preferred_channel">Preferowany kanał</Label>
+                                    <select
+                                        id="preferred_channel"
+                                        className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                                        {...register('preferred_channel')}
+                                    >
+                                        <option value="email">Email</option>
+                                        <option value="sms">SMS</option>
+                                        <option value="both">Email + SMS</option>
+                                    </select>
+                                </div>
+
+                                {/* Default sequence selection */}
+                                <div className="space-y-2 pt-4 border-t">
+                                    <Label>Domyślna sekwencja windykacyjna</Label>
+                                    <Select onValueChange={(value) => setValue('default_sequence_id', value)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Wybierz sekwencję (opcjonalnie)" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {sequences.map((seq) => (
+                                                <SelectItem key={seq.id} value={seq.id}>
+                                                    {seq.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Ta sekwencja będzie automatycznie przypisywana do nowych faktur.
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>

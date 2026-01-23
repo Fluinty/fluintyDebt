@@ -50,6 +50,9 @@ export async function executeScheduledStep(stepId: string) {
     const sequenceStep = step.sequence_steps as any;
     const debtor = invoice?.debtors;
 
+    // Get current user for logging
+    const { data: { user } } = await supabase.auth.getUser();
+
     if (!debtor?.email) {
         // Update status to failed
         await supabase
@@ -59,6 +62,7 @@ export async function executeScheduledStep(stepId: string) {
 
         // Log to collection_actions
         await supabase.from('collection_actions').insert({
+            user_id: user?.id,
             invoice_id: invoice?.id,
             action_type: sequenceStep?.channel || 'email',
             status: 'failed',
@@ -78,7 +82,6 @@ export async function executeScheduledStep(stepId: string) {
     const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // Get company name from profile
-    const { data: { user } } = await supabase.auth.getUser();
     const { data: profile } = await supabase
         .from('profiles')
         .select('company_name')
@@ -115,40 +118,57 @@ export async function executeScheduledStep(stepId: string) {
     });
 
     if (result.success) {
-        // Update scheduled step status
-        await supabase
+        // Update scheduled step status using the original stepId parameter
+        const { data: updateData, error: updateError, count } = await supabase
             .from('scheduled_steps')
             .update({
-                status: 'sent',
+                status: 'executed',
                 executed_at: new Date().toISOString(),
             })
-            .eq('id', stepId);
+            .eq('id', stepId)
+            .select();
+
+        if (updateError) {
+            console.error('UPDATE ERROR:', updateError.message, updateError.details);
+        } else if (!updateData || updateData.length === 0) {
+            console.error('NO ROWS UPDATED for stepId:', stepId);
+        } else {
+            console.log('SUCCESS: Step updated to executed -', updateData[0]?.status);
+        }
 
         // Log success to collection_actions
         await supabase.from('collection_actions').insert({
+            user_id: user?.id,
             invoice_id: invoice.id,
             action_type: sequenceStep.channel || 'email',
+            channel: sequenceStep.channel || 'email',
+            recipient_email: debtor.email,
             status: 'sent',
-            details: { message_id: result.messageId, recipient: debtor.email },
+            sent_at: new Date().toISOString(),
+            metadata: { message_id: result.messageId },
         });
 
         // Revalidate pages to show updated status
         revalidatePath('/scheduler');
         revalidatePath('/invoices');
         revalidatePath(`/invoices/${step.invoice_id}`);
+        revalidatePath('/dashboard');
 
         return { success: true, messageId: result.messageId };
     } else {
-        // Update status to failed
+        // Update status to cancelled
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'failed' })
+            .update({ status: 'cancelled' })
             .eq('id', stepId);
 
         // Log failure
         await supabase.from('collection_actions').insert({
+            user_id: user?.id,
             invoice_id: invoice.id,
             action_type: sequenceStep.channel || 'email',
+            channel: sequenceStep.channel || 'email',
+            recipient_email: debtor.email,
             status: 'failed',
             error_message: result.error,
         });

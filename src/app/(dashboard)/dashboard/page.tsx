@@ -11,6 +11,9 @@ import {
     Sparkles,
     FileText,
     Users,
+    Mail,
+    Phone,
+    Edit,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/format-currency';
@@ -34,12 +37,28 @@ export default async function DashboardPage() {
     // Fetch real stats from database
     const { data: invoices } = await supabase
         .from('invoices')
-        .select('id, invoice_number, amount, amount_paid, status, due_date, debtor_id, debtors(name)')
+        .select('id, invoice_number, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date, debtor_id, debtors(name)')
         .order('due_date', { ascending: true });
 
     const { data: debtors } = await supabase
         .from('debtors')
-        .select('id');
+        .select('id, name, email, phone, nip');
+
+    // Fetch KSeF settings to check if configured
+    const { data: ksefSettings } = await supabase
+        .from('user_ksef_settings')
+        .select('is_enabled, ksef_token_encrypted')
+        .eq('user_id', user?.id)
+        .single();
+
+    // Fetch sent messages for ActivityChart (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const { data: sentActions } = await supabase
+        .from('collection_actions')
+        .select('action_type, sent_at, created_at')
+        .eq('status', 'sent')
+        .gte('created_at', sevenDaysAgo.toISOString());
 
     const invoicesList = (invoices || []).map(inv => ({
         ...inv,
@@ -48,14 +67,65 @@ export default async function DashboardPage() {
     }));
     const debtorsList = debtors || [];
 
+    // Calculate action items - things that need user attention
+    const debtorsWithoutEmail = debtorsList.filter(d => !d.email);
+    const debtorsWithoutPhone = debtorsList.filter(d => !d.phone);
+    const invoicesWithoutSequence = invoicesList.filter(inv => !(inv as any).sequence_id && inv.calculatedStatus !== 'paid');
+    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
+
+    const actionItems: Array<{
+        id: string;
+        type: 'missing_email' | 'missing_phone' | 'ksef_not_configured';
+        title: string;
+        description: string;
+        link: string;
+        icon: typeof Mail;
+        color: string;
+    }> = [
+            ...debtorsWithoutEmail.slice(0, 3).map(d => ({
+                id: `email-${d.id}`,
+                type: 'missing_email' as const,
+                title: 'Brak adresu email',
+                description: d.name,
+                link: `/debtors/${d.id}`,
+                icon: Mail,
+                color: 'text-amber-500',
+            })),
+            ...debtorsWithoutPhone.slice(0, 2).map(d => ({
+                id: `phone-${d.id}`,
+                type: 'missing_phone' as const,
+                title: 'Brak numeru telefonu',
+                description: d.name,
+                link: `/debtors/${d.id}`,
+                icon: Phone,
+                color: 'text-blue-500',
+            })),
+        ];
+
+    // Add KSeF action if not configured
+    if (!isKSeFConfigured && debtorsList.length > 0) {
+        actionItems.unshift({
+            id: 'ksef-config',
+            type: 'ksef_not_configured' as const,
+            title: 'Skonfiguruj KSeF',
+            description: 'Automatycznie importuj faktury',
+            link: '/settings',
+            icon: FileText,
+            color: 'text-emerald-500',
+        });
+    }
+
     // Calculate stats with dynamic statuses
     const unpaidInvoices = invoicesList.filter(inv => inv.calculatedStatus !== 'paid');
     const overdueInvoices = invoicesList.filter(inv => inv.calculatedStatus === 'overdue');
     const paidInvoices = invoicesList.filter(inv => inv.calculatedStatus === 'paid');
 
-    const totalReceivables = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
-    const overdueReceivables = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
-    const recoveredThisMonth = paidInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const totalReceivables = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+    const totalReceivablesNet = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
+    const overdueReceivables = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+    const overdueReceivablesNet = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
+    const recoveredThisMonth = paidInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+    const recoveredThisMonthNet = paidInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
 
     // Get urgent invoices (overdue or due soon)
     const urgentInvoices = invoicesList
@@ -103,18 +173,19 @@ export default async function DashboardPage() {
             const seqStep = steps[0]?.sequence_steps as any;
             const sequenceName = seqStep?.sequences?.name || 'Sekwencja';
 
-            const completedSteps = sortedSteps.filter(s => s.status === 'sent').length;
+            // Count executed + skipped as completed (processed) steps
+            const completedSteps = sortedSteps.filter(s => s.status === 'executed' || s.status === 'skipped').length;
             const pendingSteps = sortedSteps.filter(s => s.status === 'pending');
-            const sentSteps = sortedSteps.filter(s => s.status === 'sent');
+            const executedSteps = sortedSteps.filter(s => s.status === 'executed');
 
-            const lastSent = sentSteps.length > 0 ? sentSteps[sentSteps.length - 1] : null;
+            const lastExecuted = executedSteps.length > 0 ? executedSteps[executedSteps.length - 1] : null;
             const nextPending = pendingSteps.length > 0 ? pendingSteps[0] : null;
 
             sequenceInfoMap.set(invoiceId, {
                 sequenceName,
                 totalSteps: sortedSteps.length,
                 completedSteps,
-                lastStepDate: lastSent?.scheduled_for || null,
+                lastStepDate: lastExecuted?.scheduled_for || null,
                 nextStepDate: nextPending?.scheduled_for || null,
             });
         }
@@ -135,24 +206,173 @@ export default async function DashboardPage() {
         { name: 'Opłacone', value: paidCount, color: '#22c55e' },
     ].filter(s => s.value > 0);
 
-    // Monthly receivables data (simplified - current month snapshot)
-    const currentMonth = new Date().toLocaleString('pl-PL', { month: 'short' });
-    const receivablesData = [
-        {
-            month: currentMonth,
-            total: totalReceivables + recoveredThisMonth,
-            overdue: overdueReceivables,
-            recovered: recoveredThisMonth
-        },
-    ];
+    // Helper functions for date formatting
+    const formatDayLabel = (date: Date) => {
+        const days = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
+        return days[date.getDay()];
+    };
 
-    // Cash flow predictions based on pending invoices
-    const predictions = [
-        { period: 'Ten tydzień', expected: Math.round(totalReceivables * 0.2), probability: 75 },
-        { period: 'Przyszły tydzień', expected: Math.round(totalReceivables * 0.15), probability: 60 },
-        { period: 'Za 2 tygodnie', expected: Math.round(totalReceivables * 0.1), probability: 45 },
-        { period: 'Za miesiąc', expected: Math.round(totalReceivables * 0.3), probability: 30 },
-    ].filter(p => p.expected > 0);
+    const formatWeekLabel = (date: Date) => {
+        const day = date.getDate();
+        const month = date.toLocaleString('pl-PL', { month: 'short' });
+        return `${day} ${month}`;
+    };
+
+    const formatMonthLabel = (date: Date) => {
+        return date.toLocaleString('pl-PL', { month: 'short' });
+    };
+
+    // Generate DAILY receivables data (3 past + today + 3 future = 7 days)
+    const generateDailyReceivables = () => {
+        const data = [];
+        const today = new Date();
+        // Show 3 past days, today, and 3 future days
+        for (let i = -3; i <= 3; i++) {
+            const date = new Date(today);
+            date.setDate(date.getDate() + i);
+            const dayStr = date.toISOString().split('T')[0];
+
+            const dayInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date).toISOString().split('T')[0];
+                return invDate === dayStr;
+            });
+
+            const total = dayInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const overdue = dayInvoices.filter(inv => inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            const recovered = dayInvoices.filter(inv => inv.calculatedStatus === 'paid')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+
+            data.push({ day: formatDayLabel(date), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    // Generate WEEKLY receivables data (4 past + current + 4 future = 9 weeks)
+    const generateWeeklyReceivables = () => {
+        const data = [];
+        const today = new Date();
+        // Show 4 past weeks, current week, and 4 future weeks
+        for (let i = -4; i <= 4; i++) {
+            const weekStart = new Date(today);
+            weekStart.setDate(weekStart.getDate() + (i * 7));
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+
+            const weekInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date);
+                return invDate >= weekStart && invDate <= weekEnd;
+            });
+
+            const total = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const overdue = weekInvoices.filter(inv => inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            const recovered = weekInvoices.filter(inv => inv.calculatedStatus === 'paid')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+
+            data.push({ week: formatWeekLabel(weekStart), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    // Generate MONTHLY receivables data (6 past + current + 5 future = 12 months total)
+    const generateMonthlyReceivables = () => {
+        const data = [];
+        const today = new Date();
+        // Show 6 past months, current month, and 5 future months
+        for (let i = -6; i <= 5; i++) {
+            const monthDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
+
+            const monthInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date);
+                return invDate >= monthDate && invDate <= monthEnd;
+            });
+
+            // Total = all invoices due this month
+            const total = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            // Overdue = invoices that are past due AND unpaid
+            const overdue = monthInvoices.filter(inv => inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            // Recovered = paid invoices
+            const recovered = monthInvoices.filter(inv => inv.calculatedStatus === 'paid')
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+
+            data.push({ month: formatMonthLabel(monthDate), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    const dailyReceivablesData = generateDailyReceivables();
+    const weeklyReceivablesData = generateWeeklyReceivables();
+    const monthlyReceivablesData = generateMonthlyReceivables();
+
+    // Activity chart data - prepare for all periods
+    const allSentActions = sentActions || [];
+
+    // DAILY activity (by hour for today)
+    const dailyActivityData = Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${hour}:00`,
+        emails: allSentActions.filter(a => {
+            const d = new Date(a.sent_at || a.created_at);
+            const today = new Date();
+            return d.getHours() === hour &&
+                d.toDateString() === today.toDateString() &&
+                a.action_type === 'email';
+        }).length,
+        sms: allSentActions.filter(a => {
+            const d = new Date(a.sent_at || a.created_at);
+            const today = new Date();
+            return d.getHours() === hour &&
+                d.toDateString() === today.toDateString() &&
+                a.action_type === 'sms';
+        }).length,
+    })).filter((_, i) => i >= 8 && i <= 18); // Show only business hours
+
+    // WEEKLY activity (by day of week)
+    const dayNames = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
+    const activityByDay: Record<string, { emails: number; sms: number }> = {};
+    dayNames.forEach(day => { activityByDay[day] = { emails: 0, sms: 0 }; });
+
+    allSentActions.forEach(action => {
+        const date = new Date(action.sent_at || action.created_at);
+        const dayName = dayNames[date.getDay()];
+        if (action.action_type === 'email') {
+            activityByDay[dayName].emails++;
+        } else if (action.action_type === 'sms') {
+            activityByDay[dayName].sms++;
+        }
+    });
+
+    const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({
+        day,
+        emails: activityByDay[day].emails,
+        sms: activityByDay[day].sms,
+    }));
+
+    // MONTHLY activity (by week)
+    const monthlyActivityData = (() => {
+        const data = [];
+        const today = new Date();
+        for (let i = 3; i >= 0; i--) {
+            const weekStart = new Date(today);
+            weekStart.setDate(weekStart.getDate() - (i * 7));
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+
+            const weekActions = allSentActions.filter(a => {
+                const d = new Date(a.sent_at || a.created_at);
+                return d >= weekStart && d <= weekEnd;
+            });
+
+            data.push({
+                week: `Tydz. ${4 - i}`,
+                emails: weekActions.filter(a => a.action_type === 'email').length,
+                sms: weekActions.filter(a => a.action_type === 'sms').length,
+            });
+        }
+        return data;
+    })();
 
     return (
         <div className="space-y-8">
@@ -189,7 +409,7 @@ export default async function DashboardPage() {
                         <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
                             <Sparkles className="h-10 w-10 text-primary" />
                         </div>
-                        <h2 className="text-2xl font-bold mb-2">Witaj w VindycAItion!</h2>
+                        <h2 className="text-2xl font-bold mb-2">Witaj w FluintyDebt!</h2>
                         <p className="text-muted-foreground mb-6 max-w-md mx-auto">
                             Zacznij od dodania kontrahentów i faktur, a system automatycznie pomoże Ci odzyskać należności.
                         </p>
@@ -224,6 +444,7 @@ export default async function DashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{formatCurrency(totalReceivables)}</div>
+                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(totalReceivablesNet)}</p>
                                 <p className="text-xs text-muted-foreground">{unpaidInvoices.length} nieopłaconych faktur</p>
                             </CardContent>
                         </Card>
@@ -236,6 +457,7 @@ export default async function DashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-red-600">{formatCurrency(overdueReceivables)}</div>
+                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(overdueReceivablesNet)}</p>
                                 <p className="text-xs text-muted-foreground">{overdueInvoices.length} przeterminowanych</p>
                             </CardContent>
                         </Card>
@@ -248,6 +470,7 @@ export default async function DashboardPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold text-green-600">{formatCurrency(recoveredThisMonth)}</div>
+                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(recoveredThisMonthNet)}</p>
                                 <p className="text-xs text-muted-foreground">{paidInvoices.length} opłaconych faktur</p>
                             </CardContent>
                         </Card>
@@ -264,6 +487,49 @@ export default async function DashboardPage() {
                             </CardContent>
                         </Card>
                     </div>
+
+                    {/* Action items - things that need attention */}
+                    {actionItems.length > 0 && (
+                        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center gap-2">
+                                    <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                    <CardTitle className="text-lg">Akcje do wykonania</CardTitle>
+                                </div>
+                                <CardDescription>
+                                    {actionItems.length} elementów wymaga Twojej uwagi
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {actionItems.slice(0, 6).map((item) => (
+                                        <Link key={item.id} href={item.link}>
+                                            <div className="flex items-center gap-3 p-3 bg-background rounded-lg border hover:border-primary/50 transition-colors">
+                                                <div className={`p-2 rounded-full bg-muted ${item.color}`}>
+                                                    <item.icon className="h-4 w-4" />
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-medium">{item.title}</p>
+                                                    <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                                                </div>
+                                                <Edit className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                                {(debtorsWithoutEmail.length > 3 || debtorsWithoutPhone.length > 2) && (
+                                    <div className="mt-3 text-center">
+                                        <Link href="/debtors">
+                                            <Button variant="ghost" size="sm">
+                                                Zobacz wszystkich kontrahentów
+                                                <ArrowRight className="h-4 w-4 ml-2" />
+                                            </Button>
+                                        </Link>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Urgent invoices */}
                     {urgentInvoices.length > 0 && (
@@ -320,7 +586,12 @@ export default async function DashboardPage() {
                                                         )}
                                                     </div>
                                                     <div className="text-right flex items-center gap-4">
-                                                        <p className="font-semibold">{formatCurrency(invoice.amount)}</p>
+                                                        <div>
+                                                            <p className="font-semibold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                                            {invoice.amount_net && (
+                                                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(invoice.amount_net)}</p>
+                                                            )}
+                                                        </div>
                                                         <StatusBadge status={invoice.calculatedStatus} />
                                                     </div>
                                                 </div>
@@ -365,13 +636,26 @@ export default async function DashboardPage() {
 
                     {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <ReceivablesChart data={receivablesData} />
+                        <ReceivablesChart
+                            data={monthlyReceivablesData}
+                            dailyData={dailyReceivablesData}
+                            weeklyData={weeklyReceivablesData}
+                        />
                         <StatusPieChart data={statusChartData} />
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <ActivityChart />
-                        <CashFlowPrediction predictions={predictions} />
+                        <ActivityChart
+                            data={weeklyActivityData}
+                            dailyData={dailyActivityData}
+                            monthlyData={monthlyActivityData}
+                        />
+                        <CashFlowPrediction predictions={[
+                            { period: 'Ten tydzień', expected: Math.round(totalReceivables * 0.2), probability: 75 },
+                            { period: 'Przyszły tydzień', expected: Math.round(totalReceivables * 0.15), probability: 60 },
+                            { period: 'Za 2 tygodnie', expected: Math.round(totalReceivables * 0.1), probability: 45 },
+                            { period: 'Za miesiąc', expected: Math.round(totalReceivables * 0.3), probability: 30 },
+                        ].filter(p => p.expected > 0)} />
                     </div>
                 </>
             )}

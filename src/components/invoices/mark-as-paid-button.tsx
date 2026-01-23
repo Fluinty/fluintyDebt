@@ -13,10 +13,8 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { markInvoiceAsPaid, recordPartialPayment } from '@/app/actions/invoice-actions';
+import { markInvoiceAsPaid } from '@/app/actions/invoice-actions';
 import { formatCurrency } from '@/lib/utils/format-currency';
 
 interface MarkAsPaidButtonProps {
@@ -30,37 +28,20 @@ export function MarkAsPaidButton({ invoiceId, amount, amountPaid, isPaid }: Mark
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
-    const [paymentType, setPaymentType] = useState<'full' | 'partial'>('full');
-    const [partialAmount, setPartialAmount] = useState('');
 
     const remaining = amount - amountPaid;
 
     const handleMarkAsPaid = async () => {
         setIsLoading(true);
         try {
-            let result;
-
-            if (paymentType === 'full') {
-                result = await markInvoiceAsPaid(invoiceId);
-            } else {
-                const parsedAmount = parseFloat(partialAmount);
-                if (isNaN(parsedAmount) || parsedAmount <= 0) {
-                    toast.error('Wprowadź poprawną kwotę');
-                    return;
-                }
-                result = await recordPartialPayment(invoiceId, parsedAmount);
-            }
+            const result = await markInvoiceAsPaid(invoiceId);
 
             if (result.error) {
                 toast.error('Błąd: ' + result.error);
                 return;
             }
 
-            toast.success(
-                result.status === 'paid'
-                    ? 'Faktura została oznaczona jako opłacona!'
-                    : 'Płatność częściowa została zarejestrowana!'
-            );
+            toast.success('Faktura została oznaczona jako opłacona!');
             setIsOpen(false);
             router.refresh();
         } catch (err) {
@@ -90,52 +71,16 @@ export function MarkAsPaidButton({ invoiceId, amount, amountPaid, isPaid }: Mark
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Zarejestruj płatność</DialogTitle>
+                    <DialogTitle>Potwierdź płatność</DialogTitle>
                     <DialogDescription>
-                        Pozostało do zapłaty: <strong>{formatCurrency(remaining)}</strong>
+                        Czy potwierdzasz otrzymanie pełnej kwoty <strong>{formatCurrency(remaining)}</strong>?
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-4">
-                    <div className="flex gap-2">
-                        <Button
-                            variant={paymentType === 'full' ? 'default' : 'outline'}
-                            onClick={() => setPaymentType('full')}
-                            className="flex-1"
-                        >
-                            Pełna kwota
-                        </Button>
-                        <Button
-                            variant={paymentType === 'partial' ? 'default' : 'outline'}
-                            onClick={() => setPaymentType('partial')}
-                            className="flex-1"
-                        >
-                            Częściowa
-                        </Button>
-                    </div>
-
-                    {paymentType === 'partial' && (
-                        <div className="space-y-2">
-                            <Label htmlFor="amount">Kwota wpłaty (PLN)</Label>
-                            <Input
-                                id="amount"
-                                type="number"
-                                step="0.01"
-                                min="0.01"
-                                max={remaining}
-                                value={partialAmount}
-                                onChange={(e) => setPartialAmount(e.target.value)}
-                                placeholder={`Max: ${remaining.toFixed(2)}`}
-                            />
-                        </div>
-                    )}
-
-                    {paymentType === 'full' && (
-                        <p className="text-sm text-muted-foreground">
-                            Zarejestrowałeś otrzymanie pełnej kwoty <strong>{formatCurrency(remaining)}</strong>.
-                            Faktura zostanie oznaczona jako opłacona i sekwencja windykacyjna zostanie zatrzymana.
-                        </p>
-                    )}
+                <div className="py-4">
+                    <p className="text-sm text-muted-foreground">
+                        Faktura zostanie oznaczona jako opłacona i sekwencja windykacyjna zostanie zatrzymana.
+                    </p>
                 </div>
 
                 <DialogFooter>

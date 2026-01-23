@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { KSeFSettingsCard } from '@/components/settings/ksef-settings-card';
 import { toast } from 'sonner';
 
 // Mock profile data
@@ -52,19 +53,6 @@ export default function SettingsPage() {
                         Zarządzaj swoim kontem i preferencjami
                     </p>
                 </div>
-                <Button onClick={handleSave} disabled={isSaving}>
-                    {isSaving ? (
-                        <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Zapisywanie...
-                        </>
-                    ) : (
-                        <>
-                            <Save className="h-4 w-4 mr-2" />
-                            Zapisz zmiany
-                        </>
-                    )}
-                </Button>
             </div>
 
             <Tabs defaultValue="company" className="space-y-6">
@@ -244,25 +232,16 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 <TabsContent value="integrations" className="space-y-6">
+                    <KSeFSettingsCard />
+
                     <Card>
                         <CardHeader>
-                            <CardTitle>Integracje</CardTitle>
+                            <CardTitle>Inne integracje</CardTitle>
                             <CardDescription>
                                 Połącz z zewnętrznymi usługami
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
-                                <div>
-                                    <p className="font-medium">KSeF</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Automatyczny import faktur z KSeF
-                                    </p>
-                                </div>
-                                <Button variant="outline" disabled>
-                                    Wkrótce
-                                </Button>
-                            </div>
                             <div className="flex items-center justify-between p-4 border rounded-lg">
                                 <div>
                                     <p className="font-medium">PayU / Przelewy24</p>
@@ -276,7 +255,7 @@ export default function SettingsPage() {
                             </div>
                             <div className="flex items-center justify-between p-4 border rounded-lg">
                                 <div>
-                                    <p className="font-medium">SendGrid</p>
+                                    <p className="font-medium">SendGrid / Resend</p>
                                     <p className="text-sm text-muted-foreground">
                                         Wysyłka emaili
                                     </p>

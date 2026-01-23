@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { StatusBadge } from '@/components/invoices/status-badge';
+import { DebtorSequenceSelector } from '@/components/debtors/debtor-sequence-selector';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import { formatDate } from '@/lib/utils/format-date';
 import { createClient } from '@/lib/supabase/server';
@@ -23,14 +24,22 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
     const { id } = await params;
     const supabase = await createClient();
 
-    // Fetch debtor from database
-    const { data: debtor } = await supabase
+    // Fetch debtor from database with sequence info
+    const { data: debtor, error: debtorError } = await supabase
         .from('debtors')
-        .select('*')
+        .select(`
+            *,
+            sequences:sequence_id (id, name)
+        `)
         .eq('id', id)
         .single();
 
+    if (debtorError) {
+        console.error('[Debtor Page] Query error:', debtorError.message);
+    }
+
     if (!debtor) {
+        console.error('[Debtor Page] Debtor not found for id:', id);
         notFound();
     }
 
@@ -141,7 +150,14 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
                                                     <p className="text-sm text-muted-foreground">{formatDate(invoice.due_date)}</p>
                                                 </div>
                                                 <div className="text-right flex items-center gap-4">
-                                                    <p className="font-semibold">{formatCurrency(invoice.amount)}</p>
+                                                    <div>
+                                                        <p className="font-semibold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                                        {invoice.amount_net && (
+                                                            <p className="text-xs text-muted-foreground">
+                                                                netto: {formatCurrency(invoice.amount_net)}
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                     <StatusBadge status={invoice.calculatedStatus} />
                                                 </div>
                                             </div>
@@ -155,6 +171,13 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
 
                 {/* Sidebar */}
                 <div className="space-y-6">
+                    {/* Sequence selector */}
+                    <DebtorSequenceSelector
+                        debtorId={debtor.id}
+                        currentSequenceId={debtor.sequence_id}
+                        currentSequenceName={debtor.sequences?.name || null}
+                    />
+
                     {/* Contact info */}
                     <Card>
                         <CardHeader>
@@ -233,12 +256,22 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
                         <CardContent className="space-y-3">
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Zadłużenie</span>
-                                <span className="font-semibold">{formatCurrency(stats.totalDebt)}</span>
+                                <div className="text-right">
+                                    <span className="font-semibold">{formatCurrency(stats.totalDebt)}</span>
+                                    {stats.totalDebtNet > 0 && (
+                                        <p className="text-xs text-muted-foreground">netto: {formatCurrency(stats.totalDebtNet)}</p>
+                                    )}
+                                </div>
                             </div>
                             {stats.overdueDebt > 0 && (
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Przeterminowane</span>
-                                    <span className="font-semibold text-red-600">{formatCurrency(stats.overdueDebt)}</span>
+                                    <div className="text-right">
+                                        <span className="font-semibold text-red-600">{formatCurrency(stats.overdueDebt)}</span>
+                                        {stats.overdueDebtNet > 0 && (
+                                            <p className="text-xs text-muted-foreground">netto: {formatCurrency(stats.overdueDebtNet)}</p>
+                                        )}
+                                    </div>
                                 </div>
                             )}
                         </CardContent>

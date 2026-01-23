@@ -1,6 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import {
     LineChart,
@@ -20,6 +22,8 @@ import {
 
 interface ReceivablesChartProps {
     data?: Array<{ month: string; total: number; overdue: number; recovered: number }>;
+    dailyData?: Array<{ day: string; total: number; overdue: number; recovered: number }>;
+    weeklyData?: Array<{ week: string; total: number; overdue: number; recovered: number }>;
 }
 
 interface StatusChartProps {
@@ -28,6 +32,8 @@ interface StatusChartProps {
 
 interface ActivityChartProps {
     data?: Array<{ day: string; emails: number; sms: number }>;
+    dailyData?: Array<{ hour: string; emails: number; sms: number }>;
+    monthlyData?: Array<{ week: string; emails: number; sms: number }>;
 }
 
 interface CashFlowProps {
@@ -59,14 +65,60 @@ const defaultPredictions = [
     { period: 'Przyszły tydzień', expected: 0, probability: 0 },
 ];
 
-export function ReceivablesChart({ data }: ReceivablesChartProps) {
-    const chartData = data && data.length > 0 ? data : defaultReceivablesData;
-    const hasData = data && data.some(d => d.total > 0 || d.overdue > 0 || d.recovered > 0);
+type Period = 'daily' | 'weekly' | 'monthly';
+
+export function ReceivablesChart({ data, dailyData, weeklyData }: ReceivablesChartProps) {
+    const [period, setPeriod] = useState<Period>('monthly');
+
+    const getChartData = () => {
+        switch (period) {
+            case 'daily':
+                return dailyData && dailyData.length > 0 ? dailyData : data || defaultReceivablesData;
+            case 'weekly':
+                return weeklyData && weeklyData.length > 0 ? weeklyData : data || defaultReceivablesData;
+            default:
+                return data && data.length > 0 ? data : defaultReceivablesData;
+        }
+    };
+
+    const chartData = getChartData();
+    const hasData = chartData.some(d => d.total > 0 || d.overdue > 0 || d.recovered > 0);
+
+    const getXAxisKey = () => {
+        switch (period) {
+            case 'daily': return 'day';
+            case 'weekly': return 'week';
+            default: return 'month';
+        }
+    };
 
     return (
         <Card className="col-span-2">
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Należności w czasie</CardTitle>
+                <div className="flex gap-1">
+                    <Button
+                        variant={period === 'daily' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('daily')}
+                    >
+                        Dzień
+                    </Button>
+                    <Button
+                        variant={period === 'weekly' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('weekly')}
+                    >
+                        Tydzień
+                    </Button>
+                    <Button
+                        variant={period === 'monthly' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('monthly')}
+                    >
+                        Miesiąc
+                    </Button>
+                </div>
             </CardHeader>
             <CardContent>
                 {!hasData ? (
@@ -77,11 +129,17 @@ export function ReceivablesChart({ data }: ReceivablesChartProps) {
                     <ResponsiveContainer width="100%" height={300}>
                         <LineChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
+                            <XAxis dataKey={getXAxisKey()} stroke="#6b7280" fontSize={12} />
                             <YAxis
                                 stroke="#6b7280"
                                 fontSize={12}
-                                tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                                tickFormatter={(value) => {
+                                    if (value === 0) return '0 zł';
+                                    if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M zł`;
+                                    if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}k zł`;
+                                    return `${value.toFixed(0)} zł`;
+                                }}
+                                width={80}
                             />
                             <Tooltip
                                 formatter={(value) => value !== undefined ? formatCurrency(value as number) : ''}
@@ -161,14 +219,66 @@ export function StatusPieChart({ data }: StatusChartProps) {
     );
 }
 
-export function ActivityChart({ data }: ActivityChartProps) {
-    const chartData = data && data.length > 0 ? data : defaultActivityData;
-    const hasData = data && data.some(d => d.emails > 0 || d.sms > 0);
+export function ActivityChart({ data, dailyData, monthlyData }: ActivityChartProps) {
+    const [period, setPeriod] = useState<Period>('weekly');
+
+    const getChartData = () => {
+        switch (period) {
+            case 'daily':
+                return dailyData && dailyData.length > 0 ? dailyData : defaultActivityData;
+            case 'monthly':
+                return monthlyData && monthlyData.length > 0 ? monthlyData : defaultActivityData;
+            default:
+                return data && data.length > 0 ? data : defaultActivityData;
+        }
+    };
+
+    const chartData = getChartData();
+    const hasData = chartData.some(d => d.emails > 0 || d.sms > 0);
+
+    const getXAxisKey = () => {
+        switch (period) {
+            case 'daily': return 'hour';
+            case 'monthly': return 'week';
+            default: return 'day';
+        }
+    };
+
+    const getTitle = () => {
+        switch (period) {
+            case 'daily': return 'Wysłane wiadomości (dziś)';
+            case 'monthly': return 'Wysłane wiadomości (miesiąc)';
+            default: return 'Wysłane wiadomości (tydzień)';
+        }
+    };
 
     return (
         <Card>
-            <CardHeader>
-                <CardTitle>Wysłane wiadomości (tydzień)</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle>{getTitle()}</CardTitle>
+                <div className="flex gap-1">
+                    <Button
+                        variant={period === 'daily' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('daily')}
+                    >
+                        Dzień
+                    </Button>
+                    <Button
+                        variant={period === 'weekly' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('weekly')}
+                    >
+                        Tydzień
+                    </Button>
+                    <Button
+                        variant={period === 'monthly' ? 'default' : 'outline'}
+                        size="sm"
+                        onClick={() => setPeriod('monthly')}
+                    >
+                        Miesiąc
+                    </Button>
+                </div>
             </CardHeader>
             <CardContent>
                 {!hasData ? (
@@ -179,7 +289,7 @@ export function ActivityChart({ data }: ActivityChartProps) {
                     <ResponsiveContainer width="100%" height={250}>
                         <BarChart data={chartData}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                            <XAxis dataKey="day" stroke="#6b7280" fontSize={12} />
+                            <XAxis dataKey={getXAxisKey()} stroke="#6b7280" fontSize={12} />
                             <YAxis stroke="#6b7280" fontSize={12} />
                             <Tooltip />
                             <Legend />

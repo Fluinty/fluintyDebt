@@ -14,17 +14,20 @@ import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calculations';
 import { MarkAsPaidButton } from '@/components/invoices/mark-as-paid-button';
 import { SequenceStepsList } from '@/components/invoices/sequence-steps-list';
+import { InvoiceQuickActions } from '@/components/invoices/invoice-quick-actions';
+import { SequenceSelector } from '@/components/invoices/sequence-selector';
 
 export default async function InvoiceDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     const supabase = await createClient();
 
-    // Fetch invoice with debtor
+    // Fetch invoice with debtor and sequence
     const { data: invoice } = await supabase
         .from('invoices')
         .select(`
             *,
-            debtors (id, name, email, phone, nip)
+            debtors (id, name, email, phone, nip),
+            sequences (id, name)
         `)
         .eq('id', id)
         .single();
@@ -96,13 +99,20 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                         </CardHeader>
                         <CardContent className="grid grid-cols-2 gap-6">
                             <div>
-                                <p className="text-sm text-muted-foreground">Kwota</p>
-                                <p className="text-2xl font-bold">{formatCurrency(invoice.amount)}</p>
+                                <p className="text-sm text-muted-foreground">Kwota brutto</p>
+                                <p className="text-2xl font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                {invoice.amount_net && (
+                                    <div className="text-sm text-muted-foreground mt-1">
+                                        <span>Netto: {formatCurrency(invoice.amount_net)}</span>
+                                        {invoice.vat_rate && <span> • VAT {invoice.vat_rate}%</span>}
+                                        {invoice.vat_amount && <span> ({formatCurrency(invoice.vat_amount)})</span>}
+                                    </div>
+                                )}
                             </div>
                             <div>
                                 <p className="text-sm text-muted-foreground">Pozostało do zapłaty</p>
                                 <p className="text-2xl font-bold text-red-600">
-                                    {formatCurrency(Number(invoice.amount) - Number(invoice.amount_paid || 0))}
+                                    {formatCurrency(Number(invoice.amount_gross || invoice.amount) - Number(invoice.amount_paid || 0))}
                                 </p>
                             </div>
                             <div>
@@ -214,26 +224,54 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                         </CardContent>
                     </Card>
 
-                    {/* Quick actions */}
+                    {/* Sequence selector with inline dropdown */}
+                    <SequenceSelector
+                        invoiceId={invoice.id}
+                        dueDate={invoice.due_date}
+                        currentSequenceId={invoice.sequence_id}
+                        currentSequenceName={(invoice as any).sequences?.name || null}
+                    />
+
+                    {/* Auto-send settings */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Akcje</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Clock className="h-4 w-4" />
+                                Automatyczne wysyłanie
+                            </CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-2">
-                            <Button variant="outline" className="w-full justify-start">
-                                <Mail className="h-4 w-4 mr-2" />
-                                Wyślij wezwanie ręcznie
-                            </Button>
-                            <Button variant="outline" className="w-full justify-start">
-                                <CreditCard className="h-4 w-4 mr-2" />
-                                Kopiuj link do płatności
-                            </Button>
-                            <Button variant="outline" className="w-full justify-start">
-                                <Play className="h-4 w-4 mr-2" />
-                                Zmień sekwencję
-                            </Button>
+                        <CardContent className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Status</span>
+                                <Badge variant={invoice.auto_send_enabled !== false ? "default" : "secondary"}>
+                                    {invoice.auto_send_enabled !== false ? "Włączone" : "Wyłączone"}
+                                </Badge>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">Godzina wysyłki</span>
+                                <span className="font-medium">{invoice.send_time || '10:00'}</span>
+                            </div>
+                            <Separator />
+                            <Link href={`/invoices/${invoice.id}/edit`}>
+                                <Button variant="outline" size="sm" className="w-full">
+                                    <Edit className="h-4 w-4 mr-2" />
+                                    Zmień ustawienia
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
+
+                    {/* Quick actions */}
+                    <InvoiceQuickActions
+                        invoiceId={invoice.id}
+                        invoiceNumber={invoice.invoice_number}
+                        debtorEmail={invoice.debtors?.email || null}
+                        debtorName={invoice.debtors?.name || 'Kontrahent'}
+                        amount={Number(invoice.amount)}
+                        dueDate={invoice.due_date}
+                        paymentLink={invoice.payment_link || null}
+                        currentSequenceId={invoice.sequence_id}
+                    />
 
                     {/* Payment link */}
                     {invoice.payment_link && (

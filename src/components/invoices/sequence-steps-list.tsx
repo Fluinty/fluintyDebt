@@ -33,9 +33,17 @@ interface SequenceStepsListProps {
 export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps) {
     const router = useRouter();
     const [loadingStepId, setLoadingStepId] = useState<string | null>(null);
+    // Local state to track step statuses for immediate UI update
+    const [stepStatuses, setStepStatuses] = useState<Record<string, string>>(() =>
+        Object.fromEntries(steps.map(s => [s.id, s.status]))
+    );
 
-    // Find index of first pending step
-    const firstPendingIndex = steps.findIndex(s => s.status === 'pending');
+    // Get current status (use local state, fallback to original)
+    const getStepStatus = (stepId: string, originalStatus: string) =>
+        stepStatuses[stepId] || originalStatus;
+
+    // Find index of first pending step (using local statuses)
+    const firstPendingIndex = steps.findIndex(s => getStepStatus(s.id, s.status) === 'pending');
 
     const handleExecuteStep = async (stepId: string, stepIndex: number) => {
         setLoadingStepId(stepId);
@@ -45,11 +53,16 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             if (stepIndex > firstPendingIndex && firstPendingIndex !== -1) {
                 const stepsToSkip = steps
                     .slice(firstPendingIndex, stepIndex)
-                    .filter(s => s.status === 'pending')
+                    .filter(s => getStepStatus(s.id, s.status) === 'pending')
                     .map(s => s.id);
 
                 if (stepsToSkip.length > 0) {
                     await skipEarlierSteps(stepsToSkip);
+                    // Update local statuses for skipped steps
+                    setStepStatuses(prev => ({
+                        ...prev,
+                        ...Object.fromEntries(stepsToSkip.map(id => [id, 'skipped']))
+                    }));
                     toast.info(`Pominięto ${stepsToSkip.length} wcześniejszych kroków`);
                 }
             }
@@ -57,8 +70,10 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             const result = await executeScheduledStep(stepId);
 
             if (result.success) {
+                // Update local status immediately - no need to wait for refresh
+                setStepStatuses(prev => ({ ...prev, [stepId]: 'executed' }));
                 toast.success('Email wysłany pomyślnie!');
-                router.refresh();
+                router.refresh(); // Still refresh but UI is already updated
             } else {
                 toast.error(result.error || 'Błąd wysyłki');
             }
@@ -78,6 +93,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             case 'failed':
                 return <XCircle className="h-4 w-4" />;
             case 'cancelled':
+            case 'skipped':
                 return <XCircle className="h-4 w-4 opacity-50" />;
             default:
                 return <Clock className="h-4 w-4" />;
@@ -92,6 +108,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             case 'failed':
                 return 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400';
             case 'cancelled':
+            case 'skipped':
                 return 'bg-muted text-muted-foreground opacity-50';
             default:
                 return 'bg-amber-100 text-amber-600 dark:bg-amber-900 dark:text-amber-400';
@@ -106,6 +123,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             case 'failed':
                 return 'Błąd';
             case 'cancelled':
+            case 'skipped':
                 return 'Pominięto';
             default:
                 return 'Oczekuje';
@@ -117,9 +135,11 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             {steps.map((step, index) => {
                 const seqStep = step.sequence_steps;
                 const isLoading = loadingStepId === step.id;
-                const isPending = step.status === 'pending';
-                const isCompleted = step.status === 'sent' || step.status === 'executed';
-                const isCancelled = step.status === 'cancelled';
+                // Use local status for immediate UI updates
+                const currentStatus = getStepStatus(step.id, step.status);
+                const isPending = currentStatus === 'pending';
+                const isCompleted = currentStatus === 'sent' || currentStatus === 'executed';
+                const isCancelled = currentStatus === 'cancelled' || currentStatus === 'skipped';
 
                 // Replace placeholders in subject for preview
                 const displaySubject = seqStep?.email_subject
@@ -129,8 +149,8 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                 return (
                     <div key={step.id} className={`flex gap-4 ${isCancelled ? 'opacity-50' : ''}`}>
                         <div className="flex flex-col items-center">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getStatusClass(step.status)}`}>
-                                {getStatusIcon(step.status)}
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getStatusClass(currentStatus)}`}>
+                                {getStatusIcon(currentStatus)}
                             </div>
                             {index < steps.length - 1 && (
                                 <div className="w-0.5 h-8 bg-border mt-2" />
@@ -153,7 +173,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Badge variant={isCompleted ? 'default' : 'outline'}>
-                                        {getStatusLabel(step.status)}
+                                        {getStatusLabel(currentStatus)}
                                     </Badge>
                                     {isPending && (
                                         <Button

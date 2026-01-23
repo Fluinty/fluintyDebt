@@ -24,7 +24,9 @@ interface DebtorWithStats {
     totalInvoices: number;
     unpaidInvoices: number;
     totalDebt: number;
+    totalDebtNet: number;
     overdueDebt: number;
+    overdueDebtNet: number;
 }
 
 export default async function DebtorsPage() {
@@ -35,7 +37,7 @@ export default async function DebtorsPage() {
         .from('debtors')
         .select(`
             id, name, nip,
-            invoices (id, amount, amount_paid, status, due_date)
+            invoices (id, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date)
         `)
         .order('created_at', { ascending: false });
 
@@ -44,6 +46,8 @@ export default async function DebtorsPage() {
         const invoices = (debtor.invoices || []) as Array<{
             id: string;
             amount: number;
+            amount_net?: number;
+            amount_gross?: number;
             amount_paid: number | null;
             status: string;
             due_date: string;
@@ -59,7 +63,9 @@ export default async function DebtorsPage() {
             totalInvoices: stats.totalInvoices,
             unpaidInvoices: stats.unpaidInvoices,
             totalDebt: stats.totalDebt,
+            totalDebtNet: stats.totalDebtNet,
             overdueDebt: stats.overdueDebt,
+            overdueDebtNet: stats.overdueDebtNet,
         };
     });
 
@@ -145,16 +151,26 @@ export default async function DebtorsPage() {
                                     <CardContent className="space-y-3">
                                         <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Zadłużenie</span>
-                                            <span className="font-medium">
-                                                {debtor.totalDebt > 0 ? formatCurrency(debtor.totalDebt) : '-'}
-                                            </span>
+                                            <div className="text-right">
+                                                <span className="font-medium">
+                                                    {debtor.totalDebt > 0 ? formatCurrency(debtor.totalDebt) : '-'}
+                                                </span>
+                                                {debtor.totalDebtNet > 0 && (
+                                                    <p className="text-xs text-muted-foreground">netto: {formatCurrency(debtor.totalDebtNet)}</p>
+                                                )}
+                                            </div>
                                         </div>
                                         {debtor.overdueDebt > 0 && (
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-muted-foreground">Przeterminowane</span>
-                                                <span className="font-medium text-red-600">
-                                                    {formatCurrency(debtor.overdueDebt)}
-                                                </span>
+                                                <div className="text-right">
+                                                    <span className="font-medium text-red-600">
+                                                        {formatCurrency(debtor.overdueDebt)}
+                                                    </span>
+                                                    {debtor.overdueDebtNet > 0 && (
+                                                        <p className="text-xs text-muted-foreground">netto: {formatCurrency(debtor.overdueDebtNet)}</p>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                         <div className="flex justify-between text-sm">

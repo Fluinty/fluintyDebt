@@ -6,7 +6,7 @@ import { DashboardWrapper } from '@/components/layout/dashboard-wrapper';
 import { createClient } from '@/lib/supabase/server';
 
 export const metadata: Metadata = {
-    title: 'VindycAItion - Dashboard',
+    title: 'FluintyDebt - Dashboard',
     description: 'Zarządzaj swoimi należnościami',
 };
 

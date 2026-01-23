@@ -6,6 +6,8 @@ import type { InvoiceStatusKey } from '@/constants/invoice-statuses';
 
 export interface InvoiceForCalculation {
     amount: number;
+    amount_net?: number;
+    amount_gross?: number;
     amount_paid: number | null;
     status: string;
     due_date: string;
@@ -15,7 +17,8 @@ export interface InvoiceForCalculation {
  * Calculate the actual status of an invoice based on due date and payment
  */
 export function getActualInvoiceStatus(invoice: InvoiceForCalculation): InvoiceStatusKey {
-    const remaining = Number(invoice.amount) - Number(invoice.amount_paid || 0);
+    const invoiceAmount = Number(invoice.amount_gross || invoice.amount);
+    const remaining = invoiceAmount - Number(invoice.amount_paid || 0);
 
     // If fully paid
     if (remaining <= 0) return 'paid';
@@ -110,12 +113,21 @@ export function calculateDebtorStats(invoices: InvoiceForCalculation[]) {
     const unpaidInvoices = processedInvoices.filter(i => i.calculatedStatus !== 'paid');
     const overdueInvoices = processedInvoices.filter(i => i.calculatedStatus === 'overdue');
 
+    // Use gross amounts (amount_gross or fallback to amount)
     const totalDebt = unpaidInvoices.reduce(
-        (sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0),
+        (sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0),
+        0
+    );
+    const totalDebtNet = unpaidInvoices.reduce(
+        (sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)),
         0
     );
     const overdueDebt = overdueInvoices.reduce(
-        (sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0),
+        (sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0),
+        0
+    );
+    const overdueDebtNet = overdueInvoices.reduce(
+        (sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)),
         0
     );
 
@@ -126,7 +138,9 @@ export function calculateDebtorStats(invoices: InvoiceForCalculation[]) {
         overdueInvoices: overdueInvoices.length,
         pendingInvoices: unpaidInvoices.length - overdueInvoices.length,
         totalDebt,
+        totalDebtNet,
         overdueDebt,
+        overdueDebtNet,
         paymentScore: calculatePaymentScore(invoices),
     };
 }

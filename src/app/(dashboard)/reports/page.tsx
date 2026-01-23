@@ -94,15 +94,103 @@ export default async function ReportsPage() {
         { name: 'Opłacone', value: paidCount, color: '#22c55e' },
     ].filter(s => s.value > 0);
 
-    const currentMonth = new Date().toLocaleString('pl-PL', { month: 'short' });
-    const receivablesData = [
-        {
-            month: currentMonth,
-            total: totalPending + totalRecovered,
-            overdue: overdueAmount,
-            recovered: totalRecovered
-        },
-    ];
+    // Helper functions for date formatting
+    const formatDay = (date: Date) => {
+        const days = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
+        return days[date.getDay()];
+    };
+
+    const formatWeek = (date: Date) => {
+        const day = date.getDate();
+        const month = date.toLocaleString('pl-PL', { month: 'short' });
+        return `${day} ${month}`;
+    };
+
+    const formatMonth = (date: Date) => {
+        return date.toLocaleString('pl-PL', { month: 'short' });
+    };
+
+    // Generate DAILY data (7 days - full week)
+    const generateDailyData = () => {
+        const data = [];
+        const today = new Date();
+        for (let i = 6; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dayStr = date.toISOString().split('T')[0];
+
+            // Filter invoices for this day (by due_date or created_at approximation)
+            const dayInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date).toISOString().split('T')[0];
+                return invDate === dayStr;
+            });
+
+            const total = dayInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
+            const overdue = dayInvoices.filter(i => i.calculatedStatus === 'overdue')
+                .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
+            const recovered = dayInvoices.filter(i => i.calculatedStatus === 'paid')
+                .reduce((sum, i) => sum + Number(i.amount), 0);
+
+            data.push({ day: formatDay(date), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    // Generate WEEKLY data (9 weeks - 8 past + current)
+    const generateWeeklyData = () => {
+        const data = [];
+        const today = new Date();
+        for (let i = 8; i >= 0; i--) {
+            const weekStart = new Date(today);
+            weekStart.setDate(weekStart.getDate() - (i * 7));
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+
+            // Filter invoices for this week
+            const weekInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date);
+                return invDate >= weekStart && invDate <= weekEnd;
+            });
+
+            const total = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+            const overdue = weekInvoices.filter(inv => inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
+            const recovered = weekInvoices.filter(inv => inv.calculatedStatus === 'paid')
+                .reduce((sum, inv) => sum + Number(inv.amount), 0);
+
+            data.push({ week: formatWeek(weekStart), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    // Generate MONTHLY data (12 months - 11 past + current)
+    const generateMonthlyData = () => {
+        const data = [];
+        const today = new Date();
+        for (let i = 11; i >= 0; i--) {
+            const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+
+            // Filter invoices for this month
+            const monthInvoices = invoicesList.filter(inv => {
+                const invDate = new Date(inv.due_date);
+                return invDate >= monthDate && invDate <= monthEnd;
+            });
+
+            const total = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
+            const overdue = monthInvoices.filter(inv => inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
+            const recovered = monthInvoices.filter(inv => inv.calculatedStatus === 'paid')
+                .reduce((sum, inv) => sum + Number(inv.amount), 0);
+
+            data.push({ month: formatMonth(monthDate), total, overdue, recovered });
+        }
+        return data;
+    };
+
+    const dailyReceivablesData = generateDailyData();
+    const weeklyReceivablesData = generateWeeklyData();
+    const monthlyReceivablesData = generateMonthlyData();
 
     return (
         <div className="space-y-6">
@@ -188,7 +276,11 @@ export default async function ReportsPage() {
 
                     {/* Charts */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <ReceivablesChart data={receivablesData} />
+                        <ReceivablesChart
+                            data={monthlyReceivablesData}
+                            dailyData={dailyReceivablesData}
+                            weeklyData={weeklyReceivablesData}
+                        />
                         <StatusPieChart data={statusChartData} />
                     </div>
 

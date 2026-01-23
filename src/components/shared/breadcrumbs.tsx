@@ -22,7 +22,6 @@ const routeLabels: Record<string, string> = {
     company: 'Dane firmy',
     payment: 'Płatności',
     integrations: 'Integracje',
-    installments: 'Raty',
 };
 
 export function Breadcrumbs() {

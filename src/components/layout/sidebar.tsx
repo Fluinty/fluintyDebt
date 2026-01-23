@@ -47,8 +47,6 @@ const navigation = [
         icon: FileText,
         children: [
             { name: 'Wszystkie', href: '/invoices' },
-            { name: 'Przeterminowane', href: '/invoices?status=overdue' },
-            { name: 'Raty', href: '/invoices/installments' },
             { name: 'Import', href: '/invoices/import' },
         ],
     },
@@ -121,7 +119,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
                         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                             <span className="text-primary-foreground font-bold text-sm">V</span>
                         </div>
-                        <span className="font-semibold text-lg">VindycAItion</span>
+                        <span className="font-semibold text-lg">FluintyDebt</span>
                     </Link>
                 </div>
 

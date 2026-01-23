@@ -43,7 +43,7 @@ export async function sendCollectionEmail(params: {
             .replace(/\n/g, '<br>')
             .replace(/\r/g, '');
 
-        const fromEmail = process.env.RESEND_FROM_EMAIL || 'VindycAItion <onboarding@resend.dev>';
+        const fromEmail = process.env.RESEND_FROM_EMAIL || 'FluintyDebt <onboarding@resend.dev>';
 
         const { data, error } = await getResendClient().emails.send({
             from: fromEmail,
@@ -75,15 +75,15 @@ export async function sendCollectionEmail(params: {
 export async function sendTestEmail(to: string): Promise<{ success: boolean; error?: string }> {
     return sendCollectionEmail({
         to,
-        subject: 'Test VindycAItion - Konfiguracja działa!',
+        subject: 'Test FluintyDebt - Konfiguracja działa!',
         body: `Cześć!
 
-To jest testowy email z VindycAItion.
+To jest testowy email z FluintyDebt.
 
 Jeśli widzisz tę wiadomość, integracja z Resend działa poprawnie!
 
 Pozdrawiamy,
-Zespół VindycAItion`,
+Zespół FluintyDebt`,
         invoiceData: {
             invoice_number: 'TEST-001',
             amount: 1000,

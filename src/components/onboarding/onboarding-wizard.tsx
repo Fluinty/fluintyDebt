@@ -10,6 +10,8 @@ import {
     Check,
     ArrowRight,
     ArrowLeft,
+    FileKey,
+    ExternalLink,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,9 +27,10 @@ interface OnboardingWizardProps {
 
 const steps = [
     { id: 1, title: 'Dane firmy', icon: Building2 },
-    { id: 2, title: 'Pierwszy kontrahent', icon: Users },
-    { id: 3, title: 'Pierwsza faktura', icon: FileText },
-    { id: 4, title: 'Sekwencja', icon: Zap },
+    { id: 2, title: 'KSeF (opcjonalne)', icon: FileKey },
+    { id: 3, title: 'Pierwszy kontrahent', icon: Users },
+    { id: 4, title: 'Pierwsza faktura', icon: FileText },
+    { id: 5, title: 'Sekwencja', icon: Zap },
 ];
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
@@ -62,6 +65,13 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     // Sequence choice
     const [selectedSequence, setSelectedSequence] = useState('standard');
 
+    // KSeF data (optional)
+    const [ksefData, setKsefData] = useState({
+        token: '',
+        nip: '',
+        skipSetup: false,
+    });
+
     const progress = (currentStep / steps.length) * 100;
 
     const handleNext = () => {
@@ -81,11 +91,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const handleComplete = () => {
         console.log('Onboarding complete:', {
             company: companyData,
+            ksef: ksefData.skipSetup ? 'skipped' : ksefData,
             debtor: debtorData,
             invoice: invoiceData,
             sequence: selectedSequence,
         });
-        toast.success('Konfiguracja zakończona! Witaj w VindycAItion 🎉');
+        toast.success('Konfiguracja zakończona! Witaj w FluintyDebt 🎉');
         onComplete();
     };
 
@@ -107,10 +118,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 <div
                                     key={step.id}
                                     className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isComplete
-                                            ? 'bg-green-500 text-white'
-                                            : isActive
-                                                ? 'bg-primary text-primary-foreground'
-                                                : 'bg-muted text-muted-foreground'
+                                        ? 'bg-green-500 text-white'
+                                        : isActive
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'bg-muted text-muted-foreground'
                                         }`}
                                 >
                                     {isComplete ? <Check className="h-5 w-5" /> : <Icon className="h-5 w-5" />}
@@ -122,9 +133,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     <CardTitle>Krok {currentStep}: {steps[currentStep - 1].title}</CardTitle>
                     <CardDescription>
                         {currentStep === 1 && 'Uzupełnij podstawowe dane Twojej firmy'}
-                        {currentStep === 2 && 'Dodaj pierwszego kontrahenta do windykacji'}
-                        {currentStep === 3 && 'Dodaj pierwszą fakturę do odzyskania'}
-                        {currentStep === 4 && 'Wybierz sekwencję windykacyjną'}
+                        {currentStep === 2 && 'Automatyczny import faktur z Krajowego Systemu e-Faktur'}
+                        {currentStep === 3 && 'Dodaj pierwszego kontrahenta do windykacji'}
+                        {currentStep === 4 && 'Dodaj pierwszą fakturę do odzyskania'}
+                        {currentStep === 5 && 'Wybierz sekwencję windykacyjną'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -175,8 +187,83 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         </div>
                     )}
 
-                    {/* Step 2: Debtor */}
+                    {/* Step 2: KSeF (Optional) */}
                     {currentStep === 2 && (
+                        <div className="space-y-4">
+                            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                                <div className="flex items-start gap-3">
+                                    <FileKey className="h-5 w-5 text-primary mt-0.5" />
+                                    <div>
+                                        <p className="font-medium">Automatyczny import faktur</p>
+                                        <p className="text-sm text-muted-foreground mt-1">
+                                            Połącz się z KSeF, aby automatycznie importować faktury sprzedażowe
+                                            i uruchamiać dla nich sekwencje windykacyjne.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {!ksefData.skipSetup ? (
+                                <>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ksef_nip">NIP firmy *</Label>
+                                        <Input
+                                            id="ksef_nip"
+                                            value={ksefData.nip || companyData.nip}
+                                            onChange={(e) => setKsefData({ ...ksefData, nip: e.target.value })}
+                                            placeholder="1234567890"
+                                            maxLength={10}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="ksef_token">Token autoryzacyjny</Label>
+                                        <Input
+                                            id="ksef_token"
+                                            type="password"
+                                            value={ksefData.token}
+                                            onChange={(e) => setKsefData({ ...ksefData, token: e.target.value })}
+                                            placeholder="Wklej token z aplikacji KSeF"
+                                        />
+                                        <p className="text-xs text-muted-foreground">
+                                            Token możesz wygenerować w{' '}
+                                            <a
+                                                href="https://ksef-test.mf.gov.pl/aplikacja-podatnika-ksef/"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-primary hover:underline inline-flex items-center gap-1"
+                                            >
+                                                Aplikacji Podatnika KSeF
+                                                <ExternalLink className="h-3 w-3" />
+                                            </a>
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setKsefData({ ...ksefData, skipSetup: true })}
+                                        className="text-sm text-muted-foreground hover:text-foreground underline"
+                                    >
+                                        Pomiń - skonfiguruję później w Ustawieniach
+                                    </button>
+                                </>
+                            ) : (
+                                <div className="text-center py-6">
+                                    <p className="text-muted-foreground">
+                                        Integracja KSeF pominięta
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => setKsefData({ ...ksefData, skipSetup: false })}
+                                        className="text-sm text-primary hover:underline mt-2"
+                                    >
+                                        Chcę jednak skonfigurować teraz
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Step 3: Debtor */}
+                    {currentStep === 3 && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -222,8 +309,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         </div>
                     )}
 
-                    {/* Step 3: Invoice */}
-                    {currentStep === 3 && (
+                    {/* Step 4: Invoice */}
+                    {currentStep === 4 && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
@@ -268,8 +355,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         </div>
                     )}
 
-                    {/* Step 4: Sequence */}
-                    {currentStep === 4 && (
+                    {/* Step 5: Sequence */}
+                    {currentStep === 5 && (
                         <div className="space-y-4">
                             <div className="grid gap-3">
                                 {[
@@ -296,8 +383,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         key={seq.id}
                                         onClick={() => setSelectedSequence(seq.id)}
                                         className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${selectedSequence === seq.id
-                                                ? 'border-primary bg-primary/5'
-                                                : 'border-muted hover:border-primary/50'
+                                            ? 'border-primary bg-primary/5'
+                                            : 'border-muted hover:border-primary/50'
                                             }`}
                                     >
                                         <div className="flex items-center justify-between">

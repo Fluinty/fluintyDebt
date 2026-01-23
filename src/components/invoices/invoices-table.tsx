@@ -21,6 +21,10 @@ interface Invoice {
     id: string;
     invoice_number: string;
     amount: number;
+    amount_net?: number;
+    vat_rate?: string;
+    vat_amount?: number;
+    amount_gross?: number;
     due_date: string;
     debtor_id: string;
     debtors: { name: string } | null;
@@ -30,14 +34,15 @@ interface Invoice {
 
 interface InvoicesTableProps {
     invoices: Invoice[];
+    initialStatusFilter?: string;
 }
 
 type SortField = 'invoice_number' | 'debtor' | 'amount' | 'due_date' | 'status';
 type SortDirection = 'asc' | 'desc';
 
-export function InvoicesTable({ invoices }: InvoicesTableProps) {
+export function InvoicesTable({ invoices, initialStatusFilter = 'all' }: InvoicesTableProps) {
     const [search, setSearch] = useState('');
-    const [statusFilter, setStatusFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState(initialStatusFilter);
     const [sortField, setSortField] = useState<SortField>('due_date');
     const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
@@ -130,7 +135,6 @@ export function InvoicesTable({ invoices }: InvoicesTableProps) {
                                 <SelectItem value="pending">Oczekujące</SelectItem>
                                 <SelectItem value="due_soon">Bliski termin</SelectItem>
                                 <SelectItem value="overdue">Przeterminowane</SelectItem>
-                                <SelectItem value="partial">Częściowe</SelectItem>
                                 <SelectItem value="paid">Opłacone</SelectItem>
                             </SelectContent>
                         </Select>
@@ -226,9 +230,15 @@ export function InvoicesTable({ invoices }: InvoicesTableProps) {
                                                 </Link>
                                             </td>
                                             <td className="p-4">
-                                                <span className={invoice.calculatedStatus === 'overdue' ? 'text-red-600 font-semibold' : ''}>
-                                                    {formatCurrency(invoice.amount)}
-                                                </span>
+                                                <div className={invoice.calculatedStatus === 'overdue' ? 'text-red-600' : ''}>
+                                                    <span className="font-semibold">{formatCurrency(invoice.amount_gross || invoice.amount)}</span>
+                                                    {invoice.amount_net && (
+                                                        <div className="text-xs text-muted-foreground">
+                                                            netto: {formatCurrency(invoice.amount_net)}
+                                                            {invoice.vat_rate && ` • VAT ${invoice.vat_rate}%`}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="p-4">
                                                 <div>{formatDate(invoice.due_date)}</div>

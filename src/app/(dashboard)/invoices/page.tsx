@@ -8,7 +8,13 @@ import { formatCurrency } from '@/lib/utils/format-currency';
 import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calculations';
 
-export default async function InvoicesPage() {
+export default async function InvoicesPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ status?: string }>;
+}) {
+    const params = await searchParams;
+    const initialStatus = params?.status || 'all';
     const supabase = await createClient();
 
     // Fetch real invoices with debtor names
@@ -18,7 +24,7 @@ export default async function InvoicesPage() {
             *,
             debtors (name)
         `)
-        .order('created_at', { ascending: false });
+        .order('due_date', { ascending: true });
 
     // Process invoices with dynamic status using utility
     const invoicesList = (invoices || []).map((inv) => ({
@@ -27,11 +33,15 @@ export default async function InvoicesPage() {
         daysOverdue: getDaysOverdue(inv.due_date),
     }));
 
-    const totalAmount = invoicesList.reduce((sum, inv) => sum + Number(inv.amount), 0);
+    const totalAmount = invoicesList.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+    const totalAmountNet = invoicesList.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
     const overdueInvoices = invoicesList.filter((inv) => inv.calculatedStatus === 'overdue');
-    const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
+    const overdueAmount = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+    const overdueAmountNet = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
     const overdueCount = overdueInvoices.length;
     const paidInvoices = invoicesList.filter((inv) => inv.calculatedStatus === 'paid');
+    const paidAmount = paidInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+    const paidAmountNet = paidInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
 
     return (
         <div className="space-y-6">
@@ -71,6 +81,7 @@ export default async function InvoicesPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{formatCurrency(totalAmount)}</div>
+                        <p className="text-xs text-muted-foreground">netto: {formatCurrency(totalAmountNet)}</p>
                         <p className="text-xs text-muted-foreground">{invoicesList.length} faktur</p>
                     </CardContent>
                 </Card>
@@ -82,6 +93,7 @@ export default async function InvoicesPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-red-600">{formatCurrency(overdueAmount)}</div>
+                        <p className="text-xs text-muted-foreground">netto: {formatCurrency(overdueAmountNet)}</p>
                         <p className="text-xs text-muted-foreground">{overdueCount} faktur</p>
                     </CardContent>
                 </Card>
@@ -125,7 +137,7 @@ export default async function InvoicesPage() {
 
             {/* Invoices table with filters */}
             {invoicesList.length > 0 && (
-                <InvoicesTable invoices={invoicesList} />
+                <InvoicesTable invoices={invoicesList} initialStatusFilter={initialStatus} />
             )}
         </div>
     );

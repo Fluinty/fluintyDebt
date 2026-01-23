@@ -99,7 +99,7 @@ export default function RegisterPage() {
         <Card className="border-0 shadow-none lg:border lg:shadow-sm">
             <CardHeader className="space-y-1 text-center lg:text-left">
                 <div className="lg:hidden mb-6">
-                    <h1 className="text-2xl font-bold text-primary">VindycAItion</h1>
+                    <h1 className="text-2xl font-bold text-primary">FluintyDebt</h1>
                     <p className="text-muted-foreground text-sm">AI-powered debt collection</p>
                 </div>
                 <CardTitle className="text-2xl">Utwórz konto</CardTitle>

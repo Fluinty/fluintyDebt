@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Bell, AlertTriangle, CheckCircle, Clock, Calendar } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle, Clock, Calendar, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -13,16 +13,17 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { formatCurrency } from '@/lib/utils/format-currency';
 
-const STORAGE_KEY = 'vindycaition_read_notifications';
+const STORAGE_KEY = 'fluintydebt_read_notifications';
 
 interface Notification {
     id: string;
-    type: 'overdue' | 'due_soon' | 'payment' | 'scheduled' | 'info';
+    type: 'overdue' | 'due_soon' | 'payment' | 'scheduled' | 'info' | 'ksef_sync';
     title: string;
     message: string;
     time: string;
     link?: string;
     read: boolean;
+    dbId?: string; // For database-stored notifications
 }
 
 function getNotificationIcon(type: string) {
@@ -35,6 +36,8 @@ function getNotificationIcon(type: string) {
             return <CheckCircle className="h-4 w-4 text-green-500" />;
         case 'scheduled':
             return <Calendar className="h-4 w-4 text-blue-500" />;
+        case 'ksef_sync':
+            return <RefreshCw className="h-4 w-4 text-emerald-500" />;
         default:
             return <Bell className="h-4 w-4" />;
     }
@@ -216,6 +219,29 @@ export function NotificationsDropdown() {
             });
         }
 
+        // 5. Get database notifications (KSeF sync, etc.)
+        const { data: dbNotifications } = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('read', false)
+            .order('created_at', { ascending: false })
+            .limit(5);
+
+        if (dbNotifications) {
+            dbNotifications.forEach(n => {
+                notifs.push({
+                    id: `db-${n.id}`,
+                    dbId: n.id,
+                    type: n.type as Notification['type'],
+                    title: n.title,
+                    message: n.message,
+                    time: getRelativeTime(new Date(n.created_at)),
+                    link: n.link,
+                    read: n.read,
+                });
+            });
+        }
+
         // Sort by read status and limit
         notifs.sort((a, b) => {
             if (a.read === b.read) return 0;
@@ -232,7 +258,7 @@ export function NotificationsDropdown() {
     }, [loadNotifications]);
 
     // Mark all as read when dropdown closes
-    const handleOpenChange = (open: boolean) => {
+    const handleOpenChange = async (open: boolean) => {
         setIsOpen(open);
 
         if (!open && notifications.length > 0) {
@@ -242,6 +268,16 @@ export function NotificationsDropdown() {
                 markAsRead(unreadIds);
                 // Update local state
                 setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+
+                // Mark database notifications as read
+                const dbIds = notifications.filter(n => n.dbId && !n.read).map(n => n.dbId!);
+                if (dbIds.length > 0) {
+                    const supabase = createClient();
+                    await supabase
+                        .from('notifications')
+                        .update({ read: true })
+                        .in('id', dbIds);
+                }
             }
         }
     };

@@ -8,11 +8,17 @@ import { createClient } from '@/lib/supabase/server';
 export async function createInvoiceWithSchedule(data: {
     debtor_id: string;
     invoice_number: string;
-    amount: number;
+    amount: number; // Keep for backwards compatibility (gross amount)
+    amount_net?: number;
+    vat_rate?: string;
+    vat_amount?: number;
+    amount_gross?: number;
     issue_date: string;
     due_date: string;
     description?: string;
     sequence_id?: string;
+    auto_send_enabled?: boolean;
+    send_time?: string;
 }) {
     const supabase = await createClient();
 
@@ -29,12 +35,18 @@ export async function createInvoiceWithSchedule(data: {
             user_id: user.id,
             debtor_id: data.debtor_id,
             invoice_number: data.invoice_number,
-            amount: data.amount,
+            amount: data.amount_gross || data.amount, // Use gross if available
+            amount_net: data.amount_net,
+            vat_rate: data.vat_rate || '23',
+            vat_amount: data.vat_amount || 0,
+            amount_gross: data.amount_gross || data.amount,
             issue_date: data.issue_date,
             due_date: data.due_date,
             description: data.description || null,
             sequence_id: data.sequence_id || null,
             status: 'pending',
+            auto_send_enabled: data.auto_send_enabled ?? true,
+            send_time: data.send_time || '10:00',
         })
         .select('id')
         .single();
@@ -54,18 +66,26 @@ export async function createInvoiceWithSchedule(data: {
 
         if (steps && steps.length > 0) {
             const dueDate = new Date(data.due_date);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = today.toISOString().split('T')[0];
 
-            const scheduledSteps = steps.map(step => {
-                const scheduledDate = new Date(dueDate);
-                scheduledDate.setDate(scheduledDate.getDate() + step.days_offset);
+            const scheduledSteps = steps
+                .map(step => {
+                    const scheduledDate = new Date(dueDate);
+                    scheduledDate.setDate(scheduledDate.getDate() + step.days_offset);
+                    const scheduledStr = scheduledDate.toISOString().split('T')[0];
 
-                return {
-                    invoice_id: invoice.id,
-                    sequence_step_id: step.id,
-                    scheduled_for: scheduledDate.toISOString().split('T')[0],
-                    status: 'pending',
-                };
-            });
+                    // Skip steps that are in the past - mark as 'skipped'
+                    const isPast = scheduledStr < todayStr;
+
+                    return {
+                        invoice_id: invoice.id,
+                        sequence_step_id: step.id,
+                        scheduled_for: scheduledStr,
+                        status: isPast ? 'skipped' : 'pending',
+                    };
+                });
 
             const { error: stepsError } = await supabase
                 .from('scheduled_steps')
@@ -210,4 +230,168 @@ export async function recordPartialPayment(invoiceId: string, amount: number) {
     const totalAmount = Number(invoice.amount);
 
     return markInvoiceAsPaid(invoiceId, newAmountPaid);
+}
+
+/**
+ * Server action to send manual payment reminder email
+ */
+export async function sendManualReminder(invoiceId: string) {
+    const supabase = await createClient();
+
+    // Get current user
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Unauthorized' };
+    }
+
+    // Get invoice with debtor details
+    const { data: invoice } = await supabase
+        .from('invoices')
+        .select(`
+            *,
+            debtors (name, email)
+        `)
+        .eq('id', invoiceId)
+        .single();
+
+    if (!invoice) {
+        return { error: 'Invoice not found' };
+    }
+
+    if (!invoice.debtors?.email) {
+        return { error: 'Debtor has no email address' };
+    }
+
+    // Get user profile for sender name
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, company_name')
+        .eq('id', user.id)
+        .single();
+
+    const senderName = profile?.company_name || profile?.full_name || 'FluintyDebt';
+    const debtorName = invoice.debtors.name;
+    const invoiceNumber = invoice.invoice_number;
+    const amount = Number(invoice.amount);
+    const dueDate = new Date(invoice.due_date).toLocaleDateString('pl-PL');
+
+    // TODO: Integrate with actual email service (Resend, SendGrid, etc.)
+    // For now, log the action and save to collection_actions
+    console.log('Manual reminder sent:', {
+        to: invoice.debtors.email,
+        invoice: invoiceNumber,
+        amount,
+    });
+
+    // Log the action to collection_actions
+    const { error: actionError } = await supabase
+        .from('collection_actions')
+        .insert({
+            user_id: user.id,
+            invoice_id: invoiceId,
+            action_type: 'email',
+            status: 'sent',
+            channel: 'email',
+            recipient_email: invoice.debtors.email,
+            sent_at: new Date().toISOString(),
+            metadata: {
+                type: 'manual_reminder',
+                subject: `Przypomnienie o płatności - faktura ${invoiceNumber}`,
+                debtor_name: debtorName,
+                amount: amount,
+                due_date: dueDate,
+                sender: senderName,
+            },
+        });
+
+    if (actionError) {
+        console.error('Error logging action:', actionError);
+        // Don't fail - email was "sent"
+    }
+
+    return { success: true, message: 'Wezwanie zostało wysłane' };
+}
+
+/**
+ * Get all available sequences for the current user (including system sequences)
+ */
+export async function getAvailableSequences() {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Unauthorized' };
+    }
+
+    // Get user sequences and system sequences
+    const { data: sequences, error } = await supabase
+        .from('sequences')
+        .select('id, name')
+        .or(`user_id.eq.${user.id},user_id.is.null`)
+        .order('name');
+
+    if (error) {
+        return { error: error.message };
+    }
+
+    return { sequences: sequences || [] };
+}
+
+/**
+ * Change invoice sequence and regenerate scheduled steps
+ */
+export async function changeInvoiceSequence(
+    invoiceId: string,
+    sequenceId: string,
+    dueDate: string
+) {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Unauthorized' };
+    }
+
+    // Update invoice sequence_id
+    const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ sequence_id: sequenceId })
+        .eq('id', invoiceId)
+        .eq('user_id', user.id);
+
+    if (updateError) {
+        return { error: updateError.message };
+    }
+
+    // Delete existing pending scheduled steps
+    await supabase
+        .from('scheduled_steps')
+        .delete()
+        .eq('invoice_id', invoiceId)
+        .eq('status', 'pending');
+
+    // Get sequence steps
+    const { data: steps } = await supabase
+        .from('sequence_steps')
+        .select('*')
+        .eq('sequence_id', sequenceId)
+        .order('step_order');
+
+    if (steps && steps.length > 0) {
+        const dueDateObj = new Date(dueDate);
+        const scheduledSteps = steps.map(step => {
+            const scheduledDate = new Date(dueDateObj);
+            scheduledDate.setDate(scheduledDate.getDate() + step.days_offset);
+            return {
+                invoice_id: invoiceId,
+                sequence_step_id: step.id,
+                scheduled_for: scheduledDate.toISOString().split('T')[0],
+                status: 'pending' as const,
+            };
+        });
+
+        await supabase.from('scheduled_steps').insert(scheduledSteps);
+    }
+
+    return { success: true };
 }

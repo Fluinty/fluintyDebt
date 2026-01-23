@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, Loader2, CalendarIcon } from 'lucide-react';
@@ -24,15 +24,20 @@ import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { createInvoiceWithSchedule } from '@/app/actions/invoice-actions';
+import { VAT_RATES, calculateVat } from '@/constants/vat-rates';
+import { formatCurrency } from '@/lib/utils/format-currency';
 
 const invoiceSchema = z.object({
     invoice_number: z.string().min(1, 'Numer faktury jest wymagany'),
     debtor_id: z.string().min(1, 'Wybierz kontrahenta'),
-    amount: z.string().min(1, 'Kwota jest wymagana'),
+    amount_net: z.string().min(1, 'Kwota netto jest wymagana'),
+    vat_rate: z.string().min(1, 'Wybierz stawkę VAT'),
     issue_date: z.string().min(1, 'Data wystawienia jest wymagana'),
     due_date: z.string().min(1, 'Termin płatności jest wymagany'),
     description: z.string().optional(),
     sequence_id: z.string().optional(),
+    auto_send_enabled: z.boolean().optional(),
+    send_time: z.string().optional(),
 });
 
 type InvoiceFormData = z.infer<typeof invoiceSchema>;
@@ -40,12 +45,36 @@ type InvoiceFormData = z.infer<typeof invoiceSchema>;
 interface Debtor {
     id: string;
     name: string;
+    sequence_id: string | null;
+    auto_send_enabled: boolean;
+    preferred_send_time: string;
+    preferred_channel: string;
 }
 
 interface Sequence {
     id: string;
     name: string;
     description: string | null;
+}
+
+// Component for live VAT calculation display
+function VatSummary({ control }: { control: any }) {
+    const amountNet = useWatch({ control, name: 'amount_net' });
+    const vatRate = useWatch({ control, name: 'vat_rate' });
+
+    const { vatAmount, grossAmount } = useMemo(() => {
+        const net = parseFloat(amountNet) || 0;
+        return calculateVat(net, vatRate || '23');
+    }, [amountNet, vatRate]);
+
+    return (
+        <div className="space-y-1 pt-2">
+            <p className="text-2xl font-bold text-primary">{formatCurrency(grossAmount)}</p>
+            <p className="text-xs text-muted-foreground">
+                VAT: {formatCurrency(vatAmount)}
+            </p>
+        </div>
+    );
 }
 
 export default function NewInvoicePage() {
@@ -58,9 +87,15 @@ export default function NewInvoicePage() {
         register,
         handleSubmit,
         setValue,
+        control,
         formState: { errors },
     } = useForm<InvoiceFormData>({
         resolver: zodResolver(invoiceSchema),
+        defaultValues: {
+            vat_rate: '23',
+            auto_send_enabled: true,
+            send_time: '10:00',
+        },
     });
 
     // Load debtors and sequences from database
@@ -70,7 +105,7 @@ export default function NewInvoicePage() {
 
             const { data: debtorsData } = await supabase
                 .from('debtors')
-                .select('id, name')
+                .select('id, name, sequence_id, auto_send_enabled, preferred_send_time, preferred_channel')
                 .order('name');
 
             const { data: sequencesData } = await supabase
@@ -88,14 +123,23 @@ export default function NewInvoicePage() {
         setIsLoading(true);
 
         try {
+            const netAmount = parseFloat(data.amount_net);
+            const { vatAmount, grossAmount } = calculateVat(netAmount, data.vat_rate);
+
             const result = await createInvoiceWithSchedule({
                 debtor_id: data.debtor_id,
                 invoice_number: data.invoice_number,
-                amount: parseFloat(data.amount),
+                amount: grossAmount, // For backwards compatibility
+                amount_net: netAmount,
+                vat_rate: data.vat_rate,
+                vat_amount: vatAmount,
+                amount_gross: grossAmount,
                 issue_date: data.issue_date,
                 due_date: data.due_date,
                 description: data.description,
                 sequence_id: data.sequence_id,
+                auto_send_enabled: data.auto_send_enabled ?? true,
+                send_time: data.send_time || '10:00',
             });
 
             if (result.error) {
@@ -160,24 +204,61 @@ export default function NewInvoicePage() {
                                             <p className="text-sm text-red-600">{errors.invoice_number.message}</p>
                                         )}
                                     </div>
+                                </div>
+
+                                {/* VAT Section */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
                                     <div className="space-y-2">
-                                        <Label htmlFor="amount">Kwota brutto (PLN) *</Label>
+                                        <Label htmlFor="amount_net">Kwota netto (PLN) *</Label>
                                         <Input
-                                            id="amount"
+                                            id="amount_net"
                                             type="number"
                                             step="0.01"
                                             placeholder="0.00"
-                                            {...register('amount')}
+                                            {...register('amount_net')}
                                         />
-                                        {errors.amount && (
-                                            <p className="text-sm text-red-600">{errors.amount.message}</p>
+                                        {errors.amount_net && (
+                                            <p className="text-sm text-red-600">{errors.amount_net.message}</p>
                                         )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor="vat_rate">Stawka VAT *</Label>
+                                        <Select onValueChange={(value) => setValue('vat_rate', value)} defaultValue="23">
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Wybierz stawkę VAT" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {VAT_RATES.map((rate) => (
+                                                    <SelectItem key={rate.value} value={rate.value}>
+                                                        {rate.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.vat_rate && (
+                                            <p className="text-sm text-red-600">{errors.vat_rate.message}</p>
+                                        )}
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Kwota brutto</Label>
+                                        <VatSummary control={control} />
                                     </div>
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label htmlFor="debtor_id">Kontrahent *</Label>
-                                    <Select onValueChange={(value) => setValue('debtor_id', value)}>
+                                    <Select onValueChange={(value) => {
+                                        setValue('debtor_id', value);
+                                        // Inherit default settings from debtor
+                                        const selectedDebtor = debtors.find(d => d.id === value);
+                                        if (selectedDebtor) {
+                                            if (selectedDebtor.sequence_id) {
+                                                setValue('sequence_id', selectedDebtor.sequence_id);
+                                            }
+                                            setValue('auto_send_enabled', selectedDebtor.auto_send_enabled ?? true);
+                                            setValue('send_time', selectedDebtor.preferred_send_time || '10:00');
+                                        }
+                                    }}>
                                         <SelectTrigger>
                                             <SelectValue placeholder="Wybierz kontrahenta" />
                                         </SelectTrigger>
@@ -280,6 +361,43 @@ export default function NewInvoicePage() {
                                 <p className="text-xs text-muted-foreground">
                                     Sekwencja określa kiedy i jak często będą wysyłane przypomnienia o płatności.
                                 </p>
+                            </CardContent>
+                        </Card>
+
+                        {/* Auto-send settings */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Automatyczne wysyłanie</CardTitle>
+                                <CardDescription>
+                                    Ustaw automatyczne wysyłanie wiadomości
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="space-y-0.5">
+                                        <Label htmlFor="auto_send_enabled">Wysyłaj automatycznie</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Wiadomości będą wysyłane automatycznie wg harmonogramu
+                                        </p>
+                                    </div>
+                                    <input
+                                        type="checkbox"
+                                        id="auto_send_enabled"
+                                        className="h-5 w-5 rounded border-gray-300 text-primary focus:ring-primary"
+                                        {...register('auto_send_enabled')}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="send_time">Godzina wysyłki</Label>
+                                    <Input
+                                        id="send_time"
+                                        type="time"
+                                        {...register('send_time')}
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        O tej godzinie będą wysyłane wiadomości w zaplanowane dni.
+                                    </p>
+                                </div>
                             </CardContent>
                         </Card>
 

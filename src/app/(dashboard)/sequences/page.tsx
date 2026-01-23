@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { Plus, Edit, Copy, Star, Trash2, Layers } from 'lucide-react';
+import { Plus, Edit, Copy, Star, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
+import { DeleteSequenceButton } from '@/components/sequences/delete-sequence-button';
 import { createClient } from '@/lib/supabase/server';
 
 export default async function SequencesPage() {
@@ -127,9 +128,10 @@ export default async function SequencesPage() {
                                         <Copy className="h-4 w-4" />
                                     </Button>
                                     {!sequence.is_system && (
-                                        <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
-                                            <Trash2 className="h-4 w-4" />
-                                        </Button>
+                                        <DeleteSequenceButton
+                                            sequenceId={sequence.id}
+                                            sequenceName={sequence.name}
+                                        />
                                     )}
                                 </div>
                             </div>

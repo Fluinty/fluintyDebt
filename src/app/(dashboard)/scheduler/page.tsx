@@ -13,13 +13,19 @@ export default async function SchedulerPage() {
     const supabase = await createClient();
     const today = new Date().toISOString().split('T')[0];
 
-    // Fetch all scheduled steps (not just pending, so we can show history)
+    // Fetch all scheduled steps with sequence info
     const { data: scheduledSteps } = await supabase
         .from('scheduled_steps')
         .select(`
             *,
-            invoices (id, invoice_number, amount, debtors (name, email)),
-            sequence_steps (email_subject, channel, days_offset)
+            invoices (id, invoice_number, amount, amount_net, amount_gross, debtors (id, name, email)),
+            sequence_steps (
+                email_subject, 
+                channel, 
+                days_offset, 
+                step_order,
+                sequences (id, name)
+            )
         `)
         .order('scheduled_for');
 
@@ -27,6 +33,21 @@ export default async function SchedulerPage() {
 
     // Only show pending steps in scheduler
     const pendingSteps = stepsList.filter(s => s.status === 'pending');
+
+    // Calculate total steps per invoice for "Krok X/Y" display
+    const stepsPerInvoice = stepsList.reduce((acc, step) => {
+        const invoiceId = step.invoice_id;
+        if (!acc[invoiceId]) {
+            acc[invoiceId] = { total: 0, executed: 0, pending: 0 };
+        }
+        acc[invoiceId].total++;
+        if (step.status === 'executed' || step.status === 'skipped') {
+            acc[invoiceId].executed++;
+        } else if (step.status === 'pending') {
+            acc[invoiceId].pending++;
+        }
+        return acc;
+    }, {} as Record<string, { total: number; executed: number; pending: number }>);
 
     // Group pending by date
     const groupedByDate = pendingSteps.reduce((acc, step) => {
@@ -144,13 +165,32 @@ export default async function SchedulerPage() {
                                                                 <p className="font-medium">
                                                                     {seqStep?.email_subject || 'Wiadomość windykacyjna'}
                                                                 </p>
-                                                                <Link href={`/invoices/${invoice?.id}`} className="text-sm text-primary hover:underline">
-                                                                    {invoice?.invoice_number}
-                                                                </Link>
-                                                                <span className="text-sm text-muted-foreground"> • {invoice?.debtors?.name || 'Nieznany'}</span>
-                                                                {invoice?.amount && (
-                                                                    <span className="text-sm text-muted-foreground"> • {formatCurrency(invoice.amount)}</span>
-                                                                )}
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <Link href={`/invoices/${invoice?.id}`} className="text-sm text-primary hover:underline">
+                                                                        {invoice?.invoice_number}
+                                                                    </Link>
+                                                                    <span className="text-sm text-muted-foreground">•</span>
+                                                                    <Link href={`/debtors/${invoice?.debtors?.id}`} className="text-sm text-primary hover:underline">
+                                                                        {invoice?.debtors?.name || 'Nieznany'}
+                                                                    </Link>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                                    {stepsPerInvoice[step.invoice_id] && (
+                                                                        <Badge variant="outline" className="text-xs">
+                                                                            Krok {stepsPerInvoice[step.invoice_id].executed + 1}/{stepsPerInvoice[step.invoice_id].total}
+                                                                        </Badge>
+                                                                    )}
+                                                                    {seqStep?.sequences?.name && (
+                                                                        <Badge variant="secondary" className="text-xs">
+                                                                            {seqStep.sequences.name}
+                                                                        </Badge>
+                                                                    )}
+                                                                    {invoice?.amount && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {formatCurrency(invoice.amount_gross || invoice.amount)}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 {!hasEmail && (
                                                                     <p className="text-xs text-amber-600 mt-1">⚠️ Brak adresu email kontrahenta</p>
                                                                 )}

@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "VindycAItion - Automatyzacja windykacji",
+  title: "FluintyDebt - Automatyzacja windykacji",
   description: "AI-powered debt collection platform for Polish SMEs",
 };
 
