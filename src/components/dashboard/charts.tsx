@@ -21,9 +21,9 @@ import {
 } from 'recharts';
 
 interface ReceivablesChartProps {
-    data?: Array<{ month: string; total: number; overdue: number; recovered: number }>;
-    dailyData?: Array<{ day: string; total: number; overdue: number; recovered: number }>;
-    weeklyData?: Array<{ week: string; total: number; overdue: number; recovered: number }>;
+    data?: Array<{ month: string; issued: number; paid: number; pending: number; debt: number }>;
+    dailyData?: Array<{ day: string; issued: number; paid: number; pending: number; debt: number }>;
+    weeklyData?: Array<{ week: string; issued: number; paid: number; pending: number; debt: number }>;
 }
 
 interface StatusChartProps {
@@ -42,8 +42,8 @@ interface CashFlowProps {
 
 // Default mock data (used when no real data provided)
 const defaultReceivablesData = [
-    { month: 'Gru', total: 0, overdue: 0, recovered: 0 },
-    { month: 'Sty', total: 0, overdue: 0, recovered: 0 },
+    { month: 'Gru', issued: 0, paid: 0, pending: 0, debt: 0 },
+    { month: 'Sty', issued: 0, paid: 0, pending: 0, debt: 0 },
 ];
 
 const defaultStatusData = [
@@ -82,7 +82,7 @@ export function ReceivablesChart({ data, dailyData, weeklyData }: ReceivablesCha
     };
 
     const chartData = getChartData();
-    const hasData = chartData.some(d => d.total > 0 || d.overdue > 0 || d.recovered > 0);
+    const hasData = chartData.some(d => d.issued > 0 || d.paid > 0 || d.pending > 0 || d.debt > 0);
 
     const getXAxisKey = () => {
         switch (period) {
@@ -148,27 +148,35 @@ export function ReceivablesChart({ data, dailyData, weeklyData }: ReceivablesCha
                             <Legend />
                             <Line
                                 type="monotone"
-                                dataKey="total"
+                                dataKey="issued"
                                 stroke="#3b82f6"
                                 strokeWidth={2}
-                                name="Całkowite"
+                                name="Wystawione"
                                 dot={{ fill: '#3b82f6' }}
                             />
                             <Line
                                 type="monotone"
-                                dataKey="overdue"
-                                stroke="#ef4444"
+                                dataKey="paid"
+                                stroke="#22c55e"
                                 strokeWidth={2}
-                                name="Przeterminowane"
-                                dot={{ fill: '#ef4444' }}
+                                name="Zapłacone"
+                                dot={{ fill: '#22c55e' }}
                             />
                             <Line
                                 type="monotone"
-                                dataKey="recovered"
-                                stroke="#22c55e"
+                                dataKey="pending"
+                                stroke="#f59e0b"
                                 strokeWidth={2}
-                                name="Odzyskane"
-                                dot={{ fill: '#22c55e' }}
+                                name="Pozostało"
+                                dot={{ fill: '#f59e0b' }}
+                            />
+                            <Line
+                                type="monotone"
+                                dataKey="debt"
+                                stroke="#ef4444"
+                                strokeWidth={2}
+                                name="Dług"
+                                dot={{ fill: '#ef4444' }}
                             />
                         </LineChart>
                     </ResponsiveContainer>

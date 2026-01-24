@@ -42,10 +42,6 @@ export default async function ReportsPage() {
     const actionsList = actions || [];
 
     // Calculate stats using dynamic status
-    const totalRecovered = invoicesList
-        .filter(i => i.calculatedStatus === 'paid')
-        .reduce((sum, i) => sum + Number(i.amount), 0);
-
     const totalPending = invoicesList
         .filter(i => i.calculatedStatus !== 'paid')
         .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
@@ -110,80 +106,114 @@ export default async function ReportsPage() {
         return date.toLocaleString('pl-PL', { month: 'short' });
     };
 
-    // Generate DAILY data (7 days - full week)
+    // Generate DAILY data: Issued, Paid, Pending, Debt (cumulative)
     const generateDailyData = () => {
         const data = [];
         const today = new Date();
-        for (let i = 6; i >= 0; i--) {
+        for (let i = -3; i <= 3; i++) {
             const date = new Date(today);
-            date.setDate(date.getDate() - i);
+            date.setDate(date.getDate() + i);
             const dayStr = date.toISOString().split('T')[0];
+            const periodEnd = new Date(date);
+            periodEnd.setHours(23, 59, 59, 999);
 
-            // Filter invoices for this day (by due_date or created_at approximation)
+            // Issued = invoices due on this specific day
             const dayInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date).toISOString().split('T')[0];
                 return invDate === dayStr;
             });
+            const issued = dayInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
 
-            const total = dayInvoices.reduce((sum, i) => sum + Number(i.amount), 0);
-            const overdue = dayInvoices.filter(i => i.calculatedStatus === 'overdue')
-                .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
-            const recovered = dayInvoices.filter(i => i.calculatedStatus === 'paid')
+            // Paid = paid invoices due on this specific day
+            const paid = dayInvoices
+                .filter(inv => inv.calculatedStatus === 'paid')
                 .reduce((sum, i) => sum + Number(i.amount), 0);
 
-            data.push({ day: formatDay(date), total, overdue, recovered });
+            // Pending = invoices that are pending (not paid, not overdue) due on this day
+            const pending = dayInvoices
+                .filter(inv => inv.calculatedStatus === 'pending')
+                .reduce((sum, i) => sum + Number(i.amount), 0);
+
+            // Debt (cumulative) = all overdue invoices up to this day
+            const debt = invoicesList
+                .filter(inv => new Date(inv.due_date) <= periodEnd && inv.calculatedStatus === 'overdue')
+                .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
+
+            data.push({ day: formatDay(date), issued, paid, pending, debt });
         }
         return data;
     };
 
-    // Generate WEEKLY data (9 weeks - 8 past + current)
+    // Generate WEEKLY data: Issued, Paid, Pending, Debt (cumulative)
     const generateWeeklyData = () => {
         const data = [];
         const today = new Date();
-        for (let i = 8; i >= 0; i--) {
+        for (let i = -4; i <= 4; i++) {
             const weekStart = new Date(today);
-            weekStart.setDate(weekStart.getDate() - (i * 7));
+            weekStart.setDate(weekStart.getDate() + (i * 7));
             const weekEnd = new Date(weekStart);
             weekEnd.setDate(weekEnd.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
 
-            // Filter invoices for this week
+            // Issued = invoices due in this specific week
             const weekInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= weekStart && invDate <= weekEnd;
             });
+            const issued = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            const total = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
-            const overdue = weekInvoices.filter(inv => inv.calculatedStatus === 'overdue')
-                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
-            const recovered = weekInvoices.filter(inv => inv.calculatedStatus === 'paid')
+            // Paid = paid invoices due in this specific week
+            const paid = weekInvoices
+                .filter(inv => inv.calculatedStatus === 'paid')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            data.push({ week: formatWeek(weekStart), total, overdue, recovered });
+            // Pending = invoices that are pending (not paid, not overdue) due in this week
+            const pending = weekInvoices
+                .filter(inv => inv.calculatedStatus === 'pending')
+                .reduce((sum, inv) => sum + Number(inv.amount), 0);
+
+            // Debt (cumulative) = all overdue invoices up to end of this week
+            const debt = invoicesList
+                .filter(inv => new Date(inv.due_date) <= weekEnd && inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
+
+            data.push({ week: formatWeek(weekStart), issued, paid, pending, debt });
         }
         return data;
     };
 
-    // Generate MONTHLY data (12 months - 11 past + current)
+    // Generate MONTHLY data: Issued, Paid, Pending, Debt (cumulative)
     const generateMonthlyData = () => {
         const data = [];
         const today = new Date();
-        for (let i = 11; i >= 0; i--) {
-            const monthDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-            const monthEnd = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+        for (let i = -6; i <= 5; i++) {
+            const monthDate = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
+            monthEnd.setHours(23, 59, 59, 999);
 
-            // Filter invoices for this month
+            // Issued = invoices due in this specific month
             const monthInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= monthDate && invDate <= monthEnd;
             });
+            const issued = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            const total = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
-            const overdue = monthInvoices.filter(inv => inv.calculatedStatus === 'overdue')
-                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
-            const recovered = monthInvoices.filter(inv => inv.calculatedStatus === 'paid')
+            // Paid = paid invoices due in this specific month
+            const paid = monthInvoices
+                .filter(inv => inv.calculatedStatus === 'paid')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            data.push({ month: formatMonth(monthDate), total, overdue, recovered });
+            // Pending = invoices that are pending (not paid, not overdue) due in this month
+            const pending = monthInvoices
+                .filter(inv => inv.calculatedStatus === 'pending')
+                .reduce((sum, inv) => sum + Number(inv.amount), 0);
+
+            // Debt (cumulative) = all overdue invoices up to end of this month
+            const debt = invoicesList
+                .filter(inv => new Date(inv.due_date) <= monthEnd && inv.calculatedStatus === 'overdue')
+                .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
+
+            data.push({ month: formatMonth(monthDate), issued, paid, pending, debt });
         }
         return data;
     };
@@ -241,15 +271,7 @@ export default async function ReportsPage() {
             {hasData && (
                 <>
                     {/* Summary stats */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <Card>
-                            <CardContent className="pt-6 text-center">
-                                <p className="text-2xl font-bold text-green-600">
-                                    {formatCurrency(totalRecovered)}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Odzyskano łącznie</p>
-                            </CardContent>
-                        </Card>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <Card>
                             <CardContent className="pt-6 text-center">
                                 <p className="text-2xl font-bold text-amber-600">

@@ -11,6 +11,7 @@ export interface InvoiceForCalculation {
     amount_paid: number | null;
     status: string;
     due_date: string;
+    paid_at?: string | null;
 }
 
 /**
@@ -69,6 +70,7 @@ export function isInvoiceOverdue(invoice: InvoiceForCalculation): boolean {
 /**
  * Calculate payment score for a debtor based on their invoices
  * Score: 100 = perfect, 0 = very bad
+ * Now includes historical late payment tracking via paid_at field
  */
 export function calculatePaymentScore(invoices: InvoiceForCalculation[]): number {
     if (invoices.length === 0) return 100; // New debtor, clean slate
@@ -77,10 +79,12 @@ export function calculatePaymentScore(invoices: InvoiceForCalculation[]): number
 
     for (const invoice of invoices) {
         const status = getActualInvoiceStatus(invoice);
-        const daysOverdue = getDaysOverdue(invoice.due_date);
+        const dueDate = new Date(invoice.due_date);
+        dueDate.setHours(0, 0, 0, 0);
 
         if (status === 'overdue') {
-            // Deduct points based on how overdue
+            // Currently overdue - deduct points based on how overdue
+            const daysOverdue = getDaysOverdue(invoice.due_date);
             if (daysOverdue > 90) {
                 score -= 25; // Very late
             } else if (daysOverdue > 30) {
@@ -91,8 +95,32 @@ export function calculatePaymentScore(invoices: InvoiceForCalculation[]): number
                 score -= 5; // Just overdue
             }
         } else if (status === 'paid') {
-            // Bonus for paid invoices
-            score += 2;
+            // Check if this invoice was paid late (historical tracking)
+            const paidAt = invoice.paid_at ? new Date(invoice.paid_at) : null;
+
+            if (paidAt) {
+                paidAt.setHours(0, 0, 0, 0);
+                const daysLate = Math.floor((paidAt.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                if (daysLate > 0) {
+                    // Was paid late - deduct points (but less than currently overdue)
+                    if (daysLate > 90) {
+                        score -= 12; // Was very late but eventually paid
+                    } else if (daysLate > 30) {
+                        score -= 8; // Was late but paid
+                    } else if (daysLate > 7) {
+                        score -= 4; // Was slightly late
+                    } else {
+                        score -= 2; // Was just a bit late
+                    }
+                } else {
+                    // Paid on time or early - bonus!
+                    score += 3;
+                }
+            } else {
+                // No paid_at recorded, assume it was on time (legacy data)
+                score += 2;
+            }
         }
     }
 

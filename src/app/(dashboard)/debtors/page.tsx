@@ -8,6 +8,7 @@ import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import { createClient } from '@/lib/supabase/server';
 import { calculateDebtorStats } from '@/lib/utils/invoice-calculations';
+import { Mail, Phone, Clock } from 'lucide-react';
 
 function getScoreBadge(score: number) {
     if (score >= 80) return { label: 'Doskonały', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' };
@@ -20,6 +21,8 @@ interface DebtorWithStats {
     id: string;
     name: string;
     nip: string | null;
+    email: string | null;
+    phone: string | null;
     paymentScore: number;
     totalInvoices: number;
     unpaidInvoices: number;
@@ -27,6 +30,7 @@ interface DebtorWithStats {
     totalDebtNet: number;
     overdueDebt: number;
     overdueDebtNet: number;
+    oldestOverdueDays: number | null;
 }
 
 export default async function DebtorsPage() {
@@ -36,8 +40,8 @@ export default async function DebtorsPage() {
     const { data: debtors } = await supabase
         .from('debtors')
         .select(`
-            id, name, nip,
-            invoices (id, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date)
+            id, name, nip, email, phone,
+            invoices (id, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date, paid_at)
         `)
         .order('created_at', { ascending: false });
 
@@ -51,14 +55,33 @@ export default async function DebtorsPage() {
             amount_paid: number | null;
             status: string;
             due_date: string;
+            paid_at?: string | null;
         }>;
 
         const stats = calculateDebtorStats(invoices);
+
+        // Calculate oldest overdue invoice
+        const now = new Date();
+        const overdueInvoices = invoices.filter(inv => {
+            const isPaid = inv.status === 'paid' || (inv.amount_paid && inv.amount_paid >= (inv.amount_gross || inv.amount));
+            const isOverdue = new Date(inv.due_date) < now;
+            return !isPaid && isOverdue;
+        });
+        let oldestOverdueDays: number | null = null;
+        if (overdueInvoices.length > 0) {
+            const oldestDueDate = overdueInvoices.reduce((oldest, inv) => {
+                const dueDate = new Date(inv.due_date);
+                return dueDate < oldest ? dueDate : oldest;
+            }, new Date(overdueInvoices[0].due_date));
+            oldestOverdueDays = Math.floor((now.getTime() - oldestDueDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
 
         return {
             id: debtor.id,
             name: debtor.name,
             nip: debtor.nip,
+            email: (debtor as { email?: string }).email || null,
+            phone: (debtor as { phone?: string }).phone || null,
             paymentScore: stats.paymentScore,
             totalInvoices: stats.totalInvoices,
             unpaidInvoices: stats.unpaidInvoices,
@@ -66,6 +89,7 @@ export default async function DebtorsPage() {
             totalDebtNet: stats.totalDebtNet,
             overdueDebt: stats.overdueDebt,
             overdueDebtNet: stats.overdueDebtNet,
+            oldestOverdueDays,
         };
     });
 
@@ -149,6 +173,23 @@ export default async function DebtorsPage() {
                                         {debtor.nip && <p className="text-sm text-muted-foreground">NIP: {debtor.nip}</p>}
                                     </CardHeader>
                                     <CardContent className="space-y-3">
+                                        {/* Contact info */}
+                                        {(debtor.email || debtor.phone) && (
+                                            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pb-2 border-b">
+                                                {debtor.email && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Mail className="h-3 w-3" />
+                                                        {debtor.email}
+                                                    </span>
+                                                )}
+                                                {debtor.phone && (
+                                                    <span className="flex items-center gap-1">
+                                                        <Phone className="h-3 w-3" />
+                                                        {debtor.phone}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
                                         <div className="flex justify-between text-sm">
                                             <span className="text-muted-foreground">Zadłużenie</span>
                                             <div className="text-right">
@@ -171,6 +212,17 @@ export default async function DebtorsPage() {
                                                         <p className="text-xs text-muted-foreground">netto: {formatCurrency(debtor.overdueDebtNet)}</p>
                                                     )}
                                                 </div>
+                                            </div>
+                                        )}
+                                        {debtor.oldestOverdueDays !== null && debtor.oldestOverdueDays > 0 && (
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    Najstarsza zaległość
+                                                </span>
+                                                <span className="font-medium text-orange-600">
+                                                    {debtor.oldestOverdueDays} dni
+                                                </span>
                                             </div>
                                         )}
                                         <div className="flex justify-between text-sm">
