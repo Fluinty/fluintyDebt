@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { formatDate } from '@/lib/utils/format-date';
 import { formatCurrency } from '@/lib/utils/format-currency';
+import { processPlaceholders } from '@/lib/utils/process-placeholders';
 import { createClient } from '@/lib/supabase/server';
 import { ExecuteStepButton } from '@/components/scheduler/execute-step-button';
+import { EditStepButton } from '@/components/scheduler/edit-step-button';
 
 export default async function SchedulerPage() {
     const supabase = await createClient();
@@ -146,58 +148,76 @@ export default async function SchedulerPage() {
                                         const seqStep = step.sequence_steps as any;
                                         const hasEmail = invoice?.debtors?.email;
 
+                                        // Prepare data for placeholder replacement
+                                        const invoiceData = {
+                                            invoice_number: invoice?.invoice_number || '',
+                                            amount: invoice?.amount_gross || invoice?.amount || 0,
+                                            due_date: invoice?.due_date || '',
+                                            debtor_name: invoice?.debtors?.name || '',
+                                        };
+                                        const displaySubject = seqStep?.email_subject
+                                            ? processPlaceholders(seqStep.email_subject, invoiceData)
+                                            : 'Wiadomość windykacyjna';
+
                                         return (
                                             <Card key={step.id} className={!hasEmail ? 'border-amber-300 bg-amber-50/50 dark:bg-amber-950/20' : ''}>
-                                                <CardContent className="pt-6">
-                                                    <div className="flex items-start justify-between">
-                                                        <div className="flex items-start gap-4">
-                                                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${seqStep?.channel === 'sms'
-                                                                ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'
-                                                                : 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
-                                                                }`}>
-                                                                {seqStep?.channel === 'sms' ? (
-                                                                    <MessageSquare className="h-5 w-5" />
-                                                                ) : (
-                                                                    <Mail className="h-5 w-5" />
-                                                                )}
-                                                            </div>
-                                                            <div>
-                                                                <p className="font-medium">
-                                                                    {seqStep?.email_subject || 'Wiadomość windykacyjna'}
-                                                                </p>
-                                                                <div className="flex items-center gap-2 flex-wrap">
-                                                                    <Link href={`/invoices/${invoice?.id}`} className="text-sm text-primary hover:underline">
-                                                                        {invoice?.invoice_number}
-                                                                    </Link>
-                                                                    <span className="text-sm text-muted-foreground">•</span>
-                                                                    <Link href={`/debtors/${invoice?.debtors?.id}`} className="text-sm text-primary hover:underline">
-                                                                        {invoice?.debtors?.name || 'Nieznany'}
-                                                                    </Link>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                                                    {stepsPerInvoice[step.invoice_id] && (
-                                                                        <Badge variant="outline" className="text-xs">
-                                                                            Krok {stepsPerInvoice[step.invoice_id].executed + 1}/{stepsPerInvoice[step.invoice_id].total}
-                                                                        </Badge>
-                                                                    )}
-                                                                    {seqStep?.sequences?.name && (
-                                                                        <Badge variant="secondary" className="text-xs">
-                                                                            {seqStep.sequences.name}
-                                                                        </Badge>
-                                                                    )}
-                                                                    {invoice?.amount && (
-                                                                        <span className="text-xs text-muted-foreground">
-                                                                            {formatCurrency(invoice.amount_gross || invoice.amount)}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                {!hasEmail && (
-                                                                    <p className="text-xs text-amber-600 mt-1">⚠️ Brak adresu email kontrahenta</p>
-                                                                )}
-                                                            </div>
+                                                <CardContent className="py-4">
+                                                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                                                        {/* Channel icon */}
+                                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${seqStep?.channel === 'sms'
+                                                            ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'
+                                                            : 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
+                                                            }`}>
+                                                            {seqStep?.channel === 'sms' ? (
+                                                                <MessageSquare className="h-5 w-5" />
+                                                            ) : (
+                                                                <Mail className="h-5 w-5" />
+                                                            )}
                                                         </div>
-                                                        <div className="flex items-center gap-2">
+
+                                                        {/* Main content - grows */}
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="font-medium truncate">
+                                                                {displaySubject}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                                                <Link href={`/invoices/${invoice?.id}`} className="text-primary hover:underline truncate">
+                                                                    {invoice?.invoice_number}
+                                                                </Link>
+                                                                <span>•</span>
+                                                                <Link href={`/debtors/${invoice?.debtors?.id}`} className="text-primary hover:underline truncate">
+                                                                    {invoice?.debtors?.name || 'Nieznany'}
+                                                                </Link>
+                                                                {invoice?.amount && (
+                                                                    <>
+                                                                        <span>•</span>
+                                                                        <span>{formatCurrency(invoice.amount_gross || invoice.amount)}</span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            {!hasEmail && (
+                                                                <p className="text-xs text-amber-600 mt-1">⚠️ Brak adresu email</p>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Badges */}
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {stepsPerInvoice[step.invoice_id] && (
+                                                                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                                                    Krok {stepsPerInvoice[step.invoice_id].executed + 1}/{stepsPerInvoice[step.invoice_id].total}
+                                                                </Badge>
+                                                            )}
+                                                            {seqStep?.sequences?.name && (
+                                                                <Badge variant="secondary" className="text-xs whitespace-nowrap hidden sm:inline-flex">
+                                                                    {seqStep.sequences.name}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Status & Actions */}
+                                                        <div className="flex items-center gap-2 shrink-0">
                                                             {getStatusBadge(step.status)}
+                                                            <EditStepButton stepId={step.id} />
                                                             <ExecuteStepButton
                                                                 stepId={step.id}
                                                                 status={step.status}

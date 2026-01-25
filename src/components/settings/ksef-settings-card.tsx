@@ -52,7 +52,11 @@ import {
 } from '@/app/actions/ksef-actions';
 import type { KSeFEnvironment, SyncFrequency, UserKSeFSettings } from '@/lib/ksef/types';
 
-export function KSeFSettingsCard() {
+interface KSeFSettingsCardProps {
+    companyNip?: string;
+}
+
+export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
@@ -84,7 +88,7 @@ export function KSeFSettingsCard() {
             setFormData({
                 ksef_environment: result.settings.ksef_environment,
                 ksef_token: '', // Don't populate token field
-                ksef_nip: result.settings.ksef_nip || '',
+                ksef_nip: companyNip || result.settings.ksef_nip || '',
                 is_enabled: result.settings.is_enabled,
                 sync_frequency: result.settings.sync_frequency,
                 sync_time: result.settings.sync_time || '21:00',
@@ -301,13 +305,18 @@ export function KSeFSettingsCard() {
                         <Label htmlFor="ksef_nip">NIP powiązany z KSeF</Label>
                         <Input
                             id="ksef_nip"
-                            value={formData.ksef_nip}
-                            onChange={(e) => setFormData({ ...formData, ksef_nip: e.target.value })}
+                            value={companyNip || formData.ksef_nip}
+                            onChange={(e) => !companyNip && setFormData({ ...formData, ksef_nip: e.target.value })}
                             placeholder="1234567890"
                             maxLength={10}
+                            readOnly={!!companyNip}
+                            className={companyNip ? 'bg-muted cursor-not-allowed' : ''}
                         />
                         <p className="text-xs text-muted-foreground">
-                            NIP firmy, dla której wygenerowany jest token
+                            {companyNip
+                                ? 'NIP pobierany automatycznie z danych firmy (zakładka "Dane firmy")'
+                                : 'NIP firmy, dla której wygenerowany jest token'
+                            }
                         </p>
                     </div>
 

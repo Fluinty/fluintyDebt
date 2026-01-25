@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, CreditCard, Play, Loader2 } from 'lucide-react';
+import { Mail, CreditCard, Play, Loader2, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -139,6 +139,14 @@ export function InvoiceQuickActions({
                     >
                         <Mail className="h-4 w-4 mr-2" />
                         Wyślij wezwanie ręcznie
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="w-full justify-start"
+                        onClick={() => window.open(`/api/pdf/payment-reminder/${invoiceId}`, '_blank')}
+                    >
+                        <FileText className="h-4 w-4 mr-2" />
+                        Pobierz fakturę PDF
                     </Button>
                 </CardContent>
             </Card>

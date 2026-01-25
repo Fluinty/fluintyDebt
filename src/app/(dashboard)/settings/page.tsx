@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Save, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Save, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,33 +12,94 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { KSeFSettingsCard } from '@/components/settings/ksef-settings-card';
 import { toast } from 'sonner';
+import { fetchCompanyByNip } from '@/app/actions/gus-actions';
+import { getProfile, updateProfile, type ProfileData } from '@/app/actions/profile-actions';
 
-// Mock profile data
-const mockProfile = {
-    full_name: 'Jan Kowalski',
-    email: 'test@vindycaition.pl',
-    company_name: 'Testowa Firma Sp. z o.o.',
-    company_nip: '1234567890',
-    company_address: 'ul. Testowa 1',
-    company_city: 'Warszawa',
-    company_postal_code: '00-001',
-    company_phone: '+48 123 456 789',
-    company_email: 'kontakt@testowa.pl',
-    bank_account_number: '12 1234 5678 9012 3456 7890 1234',
-    bank_name: 'Bank Testowy',
+// Empty profile for initial state
+const emptyProfile: ProfileData = {
+    full_name: '',
+    company_name: '',
+    company_nip: '',
+    company_address: '',
+    company_city: '',
+    company_postal_code: '',
+    company_phone: '',
+    company_email: '',
+    bank_account_number: '',
+    bank_name: '',
     send_thank_you_on_payment: true,
     interest_rate: 15.5,
 };
 
 export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
-    const [profile, setProfile] = useState(mockProfile);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingGus, setIsLoadingGus] = useState(false);
+    const [profile, setProfile] = useState<ProfileData>(emptyProfile);
+    const [originalProfile, setOriginalProfile] = useState<ProfileData>(emptyProfile);
+    const [isDirty, setIsDirty] = useState(false);
+
+    // Load profile on mount
+    useEffect(() => {
+        async function loadProfile() {
+            const { data, error } = await getProfile();
+            if (data) {
+                const loadedProfile = { ...emptyProfile, ...data };
+                setProfile(loadedProfile);
+                setOriginalProfile(loadedProfile);
+            } else if (error) {
+                console.error('[Settings] Error loading profile:', error);
+            }
+            setIsLoading(false);
+        }
+        loadProfile();
+    }, []);
+
+    // Track changes
+    useEffect(() => {
+        setIsDirty(JSON.stringify(profile) !== JSON.stringify(originalProfile));
+    }, [profile, originalProfile]);
+
+    const handleGusLookup = async () => {
+        if (!profile.company_nip || profile.company_nip.trim().length === 0) {
+            toast.error('Wprowadź numer NIP');
+            return;
+        }
+
+        setIsLoadingGus(true);
+        try {
+            const result = await fetchCompanyByNip(profile.company_nip);
+
+            if (result.success && result.data) {
+                setProfile(prev => ({
+                    ...prev,
+                    company_name: result.data!.name,
+                    company_address: result.data!.address,
+                    company_city: result.data!.city,
+                    company_postal_code: result.data!.postal_code,
+                }));
+                toast.success('Dane pobrane z GUS');
+            } else {
+                toast.error(result.error || 'Nie znaleziono danych');
+            }
+        } catch (error) {
+            toast.error('Błąd połączenia z GUS');
+        } finally {
+            setIsLoadingGus(false);
+        }
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        const result = await updateProfile(profile);
         setIsSaving(false);
-        toast.success('Ustawienia zostały zapisane');
+
+        if (result.success) {
+            toast.success('Ustawienia zostały zapisane');
+            setOriginalProfile(profile); // Reset dirty state
+        } else {
+            toast.error(result.error || 'Błąd zapisu');
+        }
     };
 
     return (
@@ -53,6 +114,14 @@ export default function SettingsPage() {
                         Zarządzaj swoim kontem i preferencjami
                     </p>
                 </div>
+                <Button onClick={handleSave} disabled={isSaving || isLoading || !isDirty}>
+                    {isSaving ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Zapisz ustawienia
+                </Button>
             </div>
 
             <Tabs defaultValue="company" className="space-y-6">
@@ -82,10 +151,26 @@ export default function SettingsPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label>NIP</Label>
-                                    <Input
-                                        value={profile.company_nip}
-                                        onChange={(e) => setProfile({ ...profile, company_nip: e.target.value })}
-                                    />
+                                    <div className="flex gap-2">
+                                        <Input
+                                            value={profile.company_nip}
+                                            onChange={(e) => setProfile({ ...profile, company_nip: e.target.value })}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={handleGusLookup}
+                                            disabled={isLoadingGus}
+                                            className="shrink-0"
+                                        >
+                                            {isLoadingGus ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Search className="h-4 w-4" />
+                                            )}
+                                            <span className="ml-2 hidden sm:inline">Pobierz z GUS</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             </div>
                             <div className="space-y-2">
@@ -232,7 +317,7 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 <TabsContent value="integrations" className="space-y-6">
-                    <KSeFSettingsCard />
+                    <KSeFSettingsCard companyNip={profile.company_nip} />
 
                     <Card>
                         <CardHeader>

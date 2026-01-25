@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft, Loader2, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,6 +23,7 @@ import {
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
+import { fetchCompanyByNip } from '@/app/actions/gus-actions';
 
 const debtorSchema = z.object({
     name: z.string().min(2, 'Nazwa firmy jest wymagana'),
@@ -51,6 +52,7 @@ interface Sequence {
 export default function NewDebtorPage() {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const [isLoadingGus, setIsLoadingGus] = useState(false);
     const [sequences, setSequences] = useState<Sequence[]>([]);
 
     // Load sequences
@@ -70,6 +72,7 @@ export default function NewDebtorPage() {
         register,
         handleSubmit,
         setValue,
+        watch,
         formState: { errors },
     } = useForm<DebtorFormData>({
         resolver: zodResolver(debtorSchema),
@@ -79,6 +82,34 @@ export default function NewDebtorPage() {
             preferred_channel: 'email',
         },
     });
+
+    const nipValue = watch('nip');
+
+    const handleGusLookup = async () => {
+        if (!nipValue || nipValue.trim().length === 0) {
+            toast.error('Wprowadź numer NIP');
+            return;
+        }
+
+        setIsLoadingGus(true);
+        try {
+            const result = await fetchCompanyByNip(nipValue);
+
+            if (result.success && result.data) {
+                setValue('name', result.data.name);
+                setValue('address', result.data.address);
+                setValue('city', result.data.city);
+                setValue('postal_code', result.data.postal_code);
+                toast.success('Dane pobrane z GUS');
+            } else {
+                toast.error(result.error || 'Nie znaleziono danych');
+            }
+        } catch (error) {
+            toast.error('Błąd połączenia z GUS');
+        } finally {
+            setIsLoadingGus(false);
+        }
+    };
 
     const onSubmit = async (data: DebtorFormData) => {
         setIsLoading(true);
@@ -171,11 +202,27 @@ export default function NewDebtorPage() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label htmlFor="nip">NIP</Label>
-                                        <Input
-                                            id="nip"
-                                            placeholder="np. 1234567890"
-                                            {...register('nip')}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id="nip"
+                                                placeholder="np. 1234567890"
+                                                {...register('nip')}
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleGusLookup}
+                                                disabled={isLoadingGus}
+                                                className="shrink-0"
+                                            >
+                                                {isLoadingGus ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Search className="h-4 w-4" />
+                                                )}
+                                                <span className="ml-2 hidden sm:inline">Pobierz z GUS</span>
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             </CardContent>

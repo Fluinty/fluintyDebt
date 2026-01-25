@@ -3,6 +3,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { createKSeFClient } from '@/lib/ksef/client';
 import { generateScheduledSteps } from '@/lib/sequences/generate-schedule';
+import { lookupCompanyByNip } from '@/lib/gus/gus-client';
+import { parseKSeFXml } from '@/lib/ksef/xml-parser'; // Import parser
 import type { KSeFEnvironment, KSeFSettingsFormData, UserKSeFSettings } from '@/lib/ksef/types';
 
 /**
@@ -528,12 +530,32 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
                     console.log('[Sync] Found existing debtor:', debtorId);
                 } else {
                     // Create new debtor with default sequence
+                    // Try to get additional data from GUS API
+                    let gusData: { address?: string; city?: string; postal_code?: string; name?: string } = {};
+                    try {
+                        const gusResult = await lookupCompanyByNip(buyerNip);
+                        if (gusResult.success && gusResult.data) {
+                            gusData = {
+                                address: gusResult.data.address,
+                                city: gusResult.data.city,
+                                postal_code: gusResult.data.postal_code,
+                                name: gusResult.data.name,
+                            };
+                            console.log('[Sync] Got GUS data for debtor:', gusData.name);
+                        }
+                    } catch (gusError) {
+                        console.log('[Sync] Could not fetch GUS data:', gusError);
+                    }
+
                     const { data: newDebtor, error: debtorError } = await supabase
                         .from('debtors')
                         .insert({
                             user_id: user.id,
-                            name: buyerName,
+                            name: gusData.name || buyerName,
                             nip: buyerNip,
+                            address: gusData.address || null,
+                            city: gusData.city || null,
+                            postal_code: gusData.postal_code || null,
                             sequence_id: defaultSequence?.id || null,
                         })
                         .select('id')
@@ -543,7 +565,7 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
                         console.error('[Sync] Failed to create debtor:', buyerNip, debtorError.message);
                     } else {
                         debtorId = newDebtor?.id || null;
-                        console.log('[Sync] Created new debtor:', debtorId);
+                        console.log('[Sync] Created new debtor with GUS data:', debtorId);
                     }
                     sequenceId = defaultSequence?.id || null;
                 }
@@ -636,6 +658,32 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
             } else if (newInvoice) {
                 console.log('[Sync] Inserted invoice:', ksefNumber);
                 invoicesImported++;
+
+                // NEW: Fetch and parse XML to get invoice items
+                try {
+                    const xmlContent = await client.getInvoiceXml(ksefNumber);
+                    if (xmlContent) {
+                        const items = parseKSeFXml(xmlContent);
+                        if (items.length > 0) {
+                            console.log(`[Sync] Found ${items.length} items for invoice ${ksefNumber}`);
+                            const itemsToInsert = items.map(item => ({
+                                invoice_id: newInvoice.id,
+                                description: item.description,
+                                quantity: item.quantity,
+                                unit_price_net: item.unitPriceNet,
+                                unit_price_gross: item.unitPriceGross,
+                                vat_rate: item.vatRate,
+                                total_net: item.totalNet,
+                                total_gross: item.totalGross,
+                                unit: item.unit
+                            }));
+
+                            await supabase.from('invoice_items').insert(itemsToInsert);
+                        }
+                    }
+                } catch (xmlError) {
+                    console.error(`[Sync] Failed to fetch/parse XML for ${ksefNumber}:`, xmlError);
+                }
 
                 // Generate scheduled steps if invoice has a sequence assigned
                 if (sequenceId) {

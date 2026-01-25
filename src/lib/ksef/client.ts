@@ -415,6 +415,45 @@ export class KSeFClient {
         }
     }
 
+    /**
+     * Download invoice XML by reference number
+     */
+    async getInvoiceXml(ksefReferenceNumber: string): Promise<string | null> {
+        try {
+            if (!this.session || !this.accessToken) {
+                await this.initSession();
+            }
+
+            if (!this.accessToken) {
+                console.error('[KSeF] No access token available');
+                return null;
+            }
+
+            console.log(`[KSeF] Fetching XML for invoice: ${ksefReferenceNumber}`);
+
+            const response = await fetchWithTimeout(`${this.baseUrl}/common/invoice/${ksefReferenceNumber}`, {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/xml',
+                    'Authorization': `Bearer ${this.accessToken}`,
+                },
+            }, 30000);
+
+            if (!response.ok) {
+                console.error('[KSeF] Failed to get invoice XML:', response.status);
+                return null;
+            }
+
+            const xml = await response.text();
+            console.log(`[KSeF] XML downloaded, length: ${xml.length}`);
+            return xml;
+
+        } catch (error) {
+            console.error('[KSeF] Get invoice XML failed:', error);
+            return null;
+        }
+    }
+
     getEnvironment(): KSeFEnvironment {
         return this.environment;
     }

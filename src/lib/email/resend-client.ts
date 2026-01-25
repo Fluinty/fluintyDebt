@@ -32,6 +32,10 @@ export async function sendCollectionEmail(params: {
         interest_amount?: number;
         total_with_interest?: number;
     };
+    attachments?: {
+        filename: string;
+        content: Buffer;
+    }[];
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
     try {
         // Process placeholders in subject and body
@@ -55,6 +59,7 @@ export async function sendCollectionEmail(params: {
                 </div>
             `,
             text: processedBody, // Plain text fallback
+            attachments: params.attachments,
         });
 
         if (error) {

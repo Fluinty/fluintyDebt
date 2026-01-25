@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, MessageSquare } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, MessageSquare, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { executeScheduledStep, skipEarlierSteps } from '@/app/actions/email-actions';
 import { formatDate } from '@/lib/utils/format-date';
 import { processPlaceholders } from '@/lib/utils/process-placeholders';
+import { EditStepButton } from '@/components/scheduler/edit-step-button';
 
 interface ScheduledStep {
     id: string;
@@ -176,24 +177,27 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                                         {getStatusLabel(currentStatus)}
                                     </Badge>
                                     {isPending && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleExecuteStep(step.id, index)}
-                                            disabled={isLoading}
-                                        >
-                                            {isLoading ? (
-                                                <>
-                                                    <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                                    Wysyłam...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Send className="h-4 w-4 mr-1" />
-                                                    Wyślij
-                                                </>
-                                            )}
-                                        </Button>
+                                        <>
+                                            <EditStepButton stepId={step.id} />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleExecuteStep(step.id, index)}
+                                                disabled={isLoading}
+                                            >
+                                                {isLoading ? (
+                                                    <>
+                                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                                        Wysyłam...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Send className="h-4 w-4 mr-1" />
+                                                        Wyślij
+                                                    </>
+                                                )}
+                                            </Button>
+                                        </>
                                     )}
                                 </div>
                             </div>

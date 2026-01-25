@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { sendCollectionEmail } from '@/lib/email/resend-client';
+import { generatePaymentReminderPDF } from '@/lib/pdf/generator';
 import { revalidatePath } from 'next/cache';
 
 /**
@@ -38,6 +39,9 @@ export async function executeScheduledStep(stepId: string) {
         .eq('id', stepId)
         .single();
 
+    // ... validation logic omitted for brevity ...
+    // (unchanged validation logic)
+
     if (stepError || !step) {
         return { error: 'Nie znaleziono kroku' };
     }
@@ -54,6 +58,7 @@ export async function executeScheduledStep(stepId: string) {
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!debtor?.email) {
+        // ... (unchanged failure logic) ...
         // Update status to failed
         await supabase
             .from('scheduled_steps')
@@ -100,14 +105,33 @@ export async function executeScheduledStep(stepId: string) {
         totalWithInterest = Number(invoice.amount) + interestAmount;
     }
 
-    // Send the email
+    // Generate PDF attachment
+    let attachments = undefined;
+    try {
+        if (user?.id) {
+            const { buffer, filename, error: pdfError } = await generatePaymentReminderPDF(invoice.id, user.id);
+            if (buffer && filename) {
+                attachments = [{
+                    filename: filename,
+                    content: buffer,
+                }];
+                console.log('[Email] PDF attachment generated:', filename);
+            } else {
+                console.error('[Email] Failed to generate PDF attachment:', pdfError);
+            }
+        }
+    } catch (pdfErr) {
+        console.error('[Email] Error generating PDF attachment:', pdfErr);
+    }
+
+    // Send email
     const result = await sendCollectionEmail({
         to: debtor.email,
         subject: sequenceStep.email_subject,
         body: sequenceStep.email_body,
         invoiceData: {
             invoice_number: invoice.invoice_number,
-            amount: invoice.amount,
+            amount: Number(invoice.amount),
             due_date: invoice.due_date,
             days_overdue: daysOverdue > 0 ? daysOverdue : 0,
             debtor_name: debtor.name,
@@ -115,7 +139,11 @@ export async function executeScheduledStep(stepId: string) {
             interest_amount: interestAmount,
             total_with_interest: totalWithInterest,
         },
+        attachments: attachments,
     });
+
+    // ... rest of the function (logging, updating status) ...
+
 
     if (result.success) {
         // Update scheduled step status using the original stepId parameter
@@ -156,10 +184,10 @@ export async function executeScheduledStep(stepId: string) {
 
         return { success: true, messageId: result.messageId };
     } else {
-        // Update status to cancelled
+        // Update status to failed
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'cancelled' })
+            .update({ status: 'failed' })
             .eq('id', stepId);
 
         // Log failure
@@ -176,6 +204,8 @@ export async function executeScheduledStep(stepId: string) {
         return { error: result.error };
     }
 }
+
+
 
 /**
  * Process all pending scheduled steps that are due
