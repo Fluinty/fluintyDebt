@@ -202,6 +202,24 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
                                     <p className="font-medium">{debtor.contact_person}</p>
                                 </div>
                             )}
+                            <div>
+                                <p className="text-sm text-muted-foreground">Preferowany język</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {debtor.preferred_language === 'pl' ? (
+                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
+                                            🇵🇱 Polski
+                                        </Badge>
+                                    ) : debtor.preferred_language === 'en' ? (
+                                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200">
+                                            🇬🇧 English
+                                        </Badge>
+                                    ) : (
+                                        <Badge variant="outline" className="text-muted-foreground">
+                                            Nie wybrano
+                                        </Badge>
+                                    )}
+                                </div>
+                            </div>
                             {(debtor.address || debtor.city) && (
                                 <>
                                     <Separator />
