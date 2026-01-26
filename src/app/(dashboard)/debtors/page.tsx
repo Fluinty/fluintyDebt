@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, Search, FileDown, Users } from 'lucide-react';
+import { Plus, Search, FileDown, Users, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,6 +31,7 @@ interface DebtorWithStats {
     overdueDebt: number;
     overdueDebtNet: number;
     oldestOverdueDays: number | null;
+    preferredLanguage: 'pl' | 'en' | null;
 }
 
 export default async function DebtorsPage() {
@@ -40,7 +41,7 @@ export default async function DebtorsPage() {
     const { data: debtors } = await supabase
         .from('debtors')
         .select(`
-            id, name, nip, email, phone,
+            id, name, nip, email, phone, preferred_language,
             invoices (id, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date, paid_at)
         `)
         .order('created_at', { ascending: false });
@@ -90,6 +91,7 @@ export default async function DebtorsPage() {
             overdueDebt: stats.overdueDebt,
             overdueDebtNet: stats.overdueDebtNet,
             oldestOverdueDays,
+            preferredLanguage: (debtor as any).preferred_language || null,
         };
     });
 
@@ -166,9 +168,28 @@ export default async function DebtorsPage() {
                                     <CardHeader className="pb-2">
                                         <div className="flex items-start justify-between">
                                             <CardTitle className="text-lg">{debtor.name}</CardTitle>
-                                            <Badge className={`${scoreBadge.color} border-0`}>
-                                                {debtor.paymentScore}
-                                            </Badge>
+                                            <div className="flex items-center gap-2">
+                                                {/* Language Badge */}
+                                                {debtor.preferredLanguage === 'pl' && (
+                                                    <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                                        🇵🇱 PL
+                                                    </Badge>
+                                                )}
+                                                {debtor.preferredLanguage === 'en' && (
+                                                    <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200">
+                                                        🇬🇧 EN
+                                                    </Badge>
+                                                )}
+                                                {!debtor.preferredLanguage && (
+                                                    <Badge variant="destructive" className="flex items-center gap-1">
+                                                        <AlertTriangle className="h-3 w-3" />
+                                                        Brak języka
+                                                    </Badge>
+                                                )}
+                                                <Badge className={`${scoreBadge.color} border-0`}>
+                                                    {debtor.paymentScore}
+                                                </Badge>
+                                            </div>
                                         </div>
                                         {debtor.nip && <p className="text-sm text-muted-foreground">NIP: {debtor.nip}</p>}
                                     </CardHeader>

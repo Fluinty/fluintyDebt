@@ -12,7 +12,6 @@ import {
     FileText,
     Users,
     Mail,
-    Phone,
     Edit,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -77,13 +76,13 @@ export default async function DashboardPage() {
 
     // Calculate action items - things that need user attention
     const debtorsWithoutEmail = debtorsList.filter(d => !d.email);
-    const debtorsWithoutPhone = debtorsList.filter(d => !d.phone);
+
     const invoicesWithoutSequence = invoicesList.filter(inv => !(inv as any).sequence_id && inv.calculatedStatus !== 'paid');
     const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
 
     const actionItems: Array<{
         id: string;
-        type: 'missing_email' | 'missing_phone' | 'ksef_not_configured';
+        type: 'missing_email' | 'ksef_not_configured';
         title: string;
         description: string;
         link: string;
@@ -98,15 +97,6 @@ export default async function DashboardPage() {
                 link: `/debtors/${d.id}`,
                 icon: Mail,
                 color: 'text-amber-500',
-            })),
-            ...debtorsWithoutPhone.slice(0, 2).map(d => ({
-                id: `phone-${d.id}`,
-                type: 'missing_phone' as const,
-                title: 'Brak numeru telefonu',
-                description: d.name,
-                link: `/debtors/${d.id}`,
-                icon: Phone,
-                color: 'text-blue-500',
             })),
         ];
 
@@ -357,34 +347,24 @@ export default async function DashboardPage() {
                 d.toDateString() === today.toDateString() &&
                 a.action_type === 'email';
         }).length,
-        sms: allSentActions.filter(a => {
-            const d = new Date(a.sent_at || a.created_at);
-            const today = new Date();
-            return d.getHours() === hour &&
-                d.toDateString() === today.toDateString() &&
-                a.action_type === 'sms';
-        }).length,
     })).filter((_, i) => i >= 8 && i <= 18); // Show only business hours
 
     // WEEKLY activity (by day of week)
     const dayNames = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
-    const activityByDay: Record<string, { emails: number; sms: number }> = {};
-    dayNames.forEach(day => { activityByDay[day] = { emails: 0, sms: 0 }; });
+    const activityByDay: Record<string, { emails: number }> = {};
+    dayNames.forEach(day => { activityByDay[day] = { emails: 0 }; });
 
     allSentActions.forEach(action => {
         const date = new Date(action.sent_at || action.created_at);
         const dayName = dayNames[date.getDay()];
         if (action.action_type === 'email') {
             activityByDay[dayName].emails++;
-        } else if (action.action_type === 'sms') {
-            activityByDay[dayName].sms++;
         }
     });
 
     const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({
         day,
         emails: activityByDay[day].emails,
-        sms: activityByDay[day].sms,
     }));
 
     // MONTHLY activity (by week)
@@ -405,7 +385,6 @@ export default async function DashboardPage() {
             data.push({
                 week: `Tydz. ${4 - i}`,
                 emails: weekActions.filter(a => a.action_type === 'email').length,
-                sms: weekActions.filter(a => a.action_type === 'sms').length,
             });
         }
         return data;
@@ -541,7 +520,7 @@ export default async function DashboardPage() {
                                         </Link>
                                     ))}
                                 </div>
-                                {(debtorsWithoutEmail.length > 3 || debtorsWithoutPhone.length > 2) && (
+                                {(debtorsWithoutEmail.length > 3) && (
                                     <div className="mt-3 text-center">
                                         <Link href="/debtors">
                                             <Button variant="ghost" size="sm">

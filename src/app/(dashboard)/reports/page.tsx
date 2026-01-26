@@ -51,7 +51,6 @@ export default async function ReportsPage() {
         .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
 
     const emailsSent = actionsList.filter(a => a.action_type === 'email' && a.status === 'sent').length;
-    const smsSent = actionsList.filter(a => a.action_type === 'sms' && a.status === 'sent').length;
 
     const paidInvoices = invoicesList.filter(i => i.calculatedStatus === 'paid').length;
     const totalInvoices = invoicesList.length;
@@ -290,8 +289,8 @@ export default async function ReportsPage() {
                         </Card>
                         <Card>
                             <CardContent className="pt-6 text-center">
-                                <p className="text-2xl font-bold text-blue-600">{emailsSent + smsSent}</p>
-                                <p className="text-xs text-muted-foreground">Wysłanych wiadomości</p>
+                                <p className="text-2xl font-bold text-blue-600">{emailsSent}</p>
+                                <p className="text-xs text-muted-foreground">Wysłanych emaili</p>
                             </CardContent>
                         </Card>
                     </div>

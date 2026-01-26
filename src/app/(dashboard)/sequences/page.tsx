@@ -15,7 +15,11 @@ export default async function SequencesPage() {
         .from('sequences')
         .select(`
             *,
-            sequence_steps (id)
+            sequence_steps (
+                id,
+                email_body,
+                email_body_en
+            )
         `)
         .order('created_at', { ascending: false });
 
@@ -45,7 +49,7 @@ export default async function SequencesPage() {
             <Card className="bg-primary/5 border-primary/20">
                 <CardContent className="pt-6">
                     <p className="text-sm">
-                        💡 <strong>Sekwencja</strong> to zestaw kroków (emaili, SMS-ów), które są automatycznie wysyłane
+                        💡 <strong>Sekwencja</strong> to zestaw kroków (emaili), które są automatycznie wysyłane
                         do kontrahenta przed i po terminie płatności. Każdy krok ma określony dzień wysyłki
                         względem terminu płatności faktury.
                     </p>
@@ -113,6 +117,18 @@ export default async function SequencesPage() {
                                     )}
                                     {sequence.is_default && (
                                         <Badge variant="default">Domyślna</Badge>
+                                    )}
+
+                                    {/* Language Badges */}
+                                    {sequence.sequence_steps?.some((step: any) => step.email_body) && (
+                                        <Badge variant="secondary" className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200">
+                                            🇵🇱 PL
+                                        </Badge>
+                                    )}
+                                    {sequence.sequence_steps?.some((step: any) => step.email_body_en) && (
+                                        <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200">
+                                            🇬🇧 EN
+                                        </Badge>
                                     )}
                                 </div>
                             </CardContent>

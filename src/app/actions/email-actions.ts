@@ -26,14 +26,17 @@ export async function executeScheduledStep(stepId: string) {
                 debtors (
                     id,
                     name,
-                    email
+                    email,
+                    preferred_language
                 )
             ),
             sequence_steps (
                 id,
                 channel,
                 email_subject,
-                email_body
+                email_body,
+                email_subject_en,
+                email_body_en
             )
         `)
         .eq('id', stepId)
@@ -81,6 +84,15 @@ export async function executeScheduledStep(stepId: string) {
         return { error: 'Brak szablonu email w kroku sekwencji' };
     }
 
+    // Select language-appropriate content (fallback to PL if EN not available)
+    const debtorLanguage = debtor.preferred_language || 'pl';
+    const emailSubject = (debtorLanguage === 'en' && sequenceStep.email_subject_en)
+        ? sequenceStep.email_subject_en
+        : sequenceStep.email_subject;
+    const emailBody = (debtorLanguage === 'en' && sequenceStep.email_body_en)
+        ? sequenceStep.email_body_en
+        : sequenceStep.email_body;
+
     // Calculate days overdue
     const today = new Date();
     const dueDate = new Date(invoice.due_date);
@@ -127,8 +139,8 @@ export async function executeScheduledStep(stepId: string) {
     // Send email
     const result = await sendCollectionEmail({
         to: debtor.email,
-        subject: sequenceStep.email_subject,
-        body: sequenceStep.email_body,
+        subject: emailSubject,
+        body: emailBody,
         invoiceData: {
             invoice_number: invoice.invoice_number,
             amount: Number(invoice.amount),

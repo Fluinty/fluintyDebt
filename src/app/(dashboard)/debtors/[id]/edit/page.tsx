@@ -55,6 +55,7 @@ interface Debtor {
     postal_code: string | null;
     contact_person: string | null;
     default_sequence_id: string | null;
+    preferred_language: 'pl' | 'en' | null;
     notes: string | null;
 }
 
@@ -65,6 +66,7 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
     const [debtor, setDebtor] = useState<Debtor | null>(null);
     const [sequences, setSequences] = useState<Sequence[]>([]);
     const [selectedSequence, setSelectedSequence] = useState<string>('');
+    const [selectedLanguage, setSelectedLanguage] = useState<string>('pl');
     const [isLoadingGus, setIsLoadingGus] = useState(false);
     const [debtorId, setDebtorId] = useState<string>('');
 
@@ -128,6 +130,7 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
             if (debtorData) {
                 setDebtor(debtorData);
                 setSelectedSequence(debtorData.default_sequence_id || '');
+                setSelectedLanguage(debtorData.preferred_language || 'pl');
                 reset({
                     name: debtorData.name,
                     nip: debtorData.nip || '',
@@ -165,6 +168,7 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
                     contact_person: data.contact_person || null,
                     notes: data.notes || null,
                     default_sequence_id: selectedSequence || null,
+                    preferred_language: selectedLanguage as 'pl' | 'en',
                 })
                 .eq('id', debtorId);
 
@@ -319,6 +323,21 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
                             </Select>
                             <p className="text-xs text-muted-foreground">
                                 Ta sekwencja będzie domyślnie przypisywana do nowych faktur tego kontrahenta
+                            </p>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Język komunikacji</Label>
+                            <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Wybierz język" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pl">🇵🇱 Polski</SelectItem>
+                                    <SelectItem value="en">🇬🇧 English</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Wiadomości będą wysyłane w wybranym języku
                             </p>
                         </div>
                         <div className="space-y-2">

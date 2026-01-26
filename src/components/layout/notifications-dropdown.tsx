@@ -183,7 +183,7 @@ export function NotificationsDropdown() {
                     id: notifId,
                     type: 'scheduled',
                     title: 'Zaplanowana akcja',
-                    message: `${seqStep?.channel === 'email' ? 'Email' : 'SMS'} dla ${invoice?.invoice_number || 'faktury'}`,
+                    message: `Email dla ${invoice?.invoice_number || 'faktury'}`,
                     time: 'Dzisiaj',
                     link: '/scheduler',
                     read: storedReadIds.has(notifId),

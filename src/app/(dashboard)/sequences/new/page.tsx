@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,6 +32,7 @@ interface NewStep {
 export default function NewSequencePage() {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const [selectedLanguage, setSelectedLanguage] = useState<'pl' | 'en' | null>(null);
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [steps, setSteps] = useState<NewStep[]>([
@@ -70,6 +71,11 @@ export default function NewSequencePage() {
             return;
         }
 
+        if (!selectedLanguage) {
+            toast.error('Wybierz język sekwencji');
+            return;
+        }
+
         setIsLoading(true);
 
         try {
@@ -99,15 +105,33 @@ export default function NewSequencePage() {
                 return;
             }
 
-            // Insert steps
-            const stepsToInsert = steps.map((step, index) => ({
-                sequence_id: sequence.id,
-                step_order: index + 1,
-                days_offset: step.days_offset,
-                channel: step.channel,
-                email_subject: step.email_subject || null,
-                email_body: step.email_body || 'Przypomnienie o płatności',
-            }));
+            // Insert steps - save to appropriate language columns
+            const stepsToInsert = steps.map((step, index) => {
+                const baseStep = {
+                    sequence_id: sequence.id,
+                    step_order: index + 1,
+                    days_offset: step.days_offset,
+                    channel: step.channel,
+                };
+
+                if (selectedLanguage === 'en') {
+                    return {
+                        ...baseStep,
+                        email_subject: null,
+                        email_body: 'Payment reminder', // Fallback PL
+                        email_subject_en: step.email_subject || null,
+                        email_body_en: step.email_body || 'Payment reminder',
+                    };
+                } else {
+                    return {
+                        ...baseStep,
+                        email_subject: step.email_subject || null,
+                        email_body: step.email_body || 'Przypomnienie o płatności',
+                        email_subject_en: null,
+                        email_body_en: null,
+                    };
+                }
+            });
 
             const { error: stepsError } = await supabase
                 .from('sequence_steps')
@@ -130,6 +154,68 @@ export default function NewSequencePage() {
         }
     };
 
+    // Language selection screen
+    if (!selectedLanguage) {
+        return (
+            <div className="space-y-6">
+                <Breadcrumbs />
+
+                <div className="flex items-center gap-4">
+                    <Link href="/sequences">
+                        <Button variant="ghost" size="icon">
+                            <ArrowLeft className="h-5 w-5" />
+                        </Button>
+                    </Link>
+                    <div>
+                        <h1 className="text-3xl font-bold">Nowa sekwencja</h1>
+                        <p className="text-muted-foreground mt-1">
+                            Wybierz język wiadomości
+                        </p>
+                    </div>
+                </div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Globe className="h-5 w-5" />
+                            Wybierz język sekwencji
+                        </CardTitle>
+                        <CardDescription>
+                            Treść wiadomości będzie tworzona w wybranym języku.
+                            Możesz później dodać tłumaczenie na drugi język.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button
+                                type="button"
+                                onClick={() => setSelectedLanguage('pl')}
+                                className="p-6 border-2 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                            >
+                                <div className="text-4xl mb-2">🇵🇱</div>
+                                <h3 className="text-lg font-semibold">Polski</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Twórz wiadomości po polsku
+                                </p>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setSelectedLanguage('en')}
+                                className="p-6 border-2 rounded-lg hover:border-primary hover:bg-primary/5 transition-colors text-left"
+                            >
+                                <div className="text-4xl mb-2">🇬🇧</div>
+                                <h3 className="text-lg font-semibold">English</h3>
+                                <p className="text-sm text-muted-foreground">
+                                    Create messages in English
+                                </p>
+                            </button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             <Breadcrumbs />
@@ -141,8 +227,18 @@ export default function NewSequencePage() {
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                 </Link>
-                <div>
-                    <h1 className="text-3xl font-bold">Nowa sekwencja</h1>
+                <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-3xl font-bold">Nowa sekwencja</h1>
+                        <button
+                            type="button"
+                            onClick={() => setSelectedLanguage(null)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                        >
+                            {selectedLanguage === 'pl' ? '🇵🇱 Polski' : '🇬🇧 English'}
+                            <span className="text-xs opacity-60">zmień</span>
+                        </button>
+                    </div>
                     <p className="text-muted-foreground mt-1">
                         Utwórz własną sekwencję windykacyjną
                     </p>

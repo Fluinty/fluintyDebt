@@ -39,6 +39,7 @@ const debtorSchema = z.object({
     auto_send_enabled: z.boolean().optional(),
     preferred_send_time: z.string().optional(),
     preferred_channel: z.string().optional(),
+    preferred_language: z.enum(['pl', 'en']).optional(),
 });
 
 type DebtorFormData = z.infer<typeof debtorSchema>;
@@ -80,6 +81,7 @@ export default function NewDebtorPage() {
             auto_send_enabled: true,
             preferred_send_time: '10:00',
             preferred_channel: 'email',
+            preferred_language: 'pl',
         },
     });
 
@@ -140,6 +142,7 @@ export default function NewDebtorPage() {
                 auto_send_enabled: data.auto_send_enabled ?? true,
                 preferred_send_time: data.preferred_send_time || '10:00',
                 preferred_channel: data.preferred_channel || 'email',
+                preferred_language: data.preferred_language || 'pl',
             });
 
             if (error) {
@@ -370,17 +373,20 @@ export default function NewDebtorPage() {
                                         {...register('preferred_send_time')}
                                     />
                                 </div>
+
                                 <div className="space-y-2">
-                                    <Label htmlFor="preferred_channel">Preferowany kanał</Label>
+                                    <Label htmlFor="preferred_language">Język komunikacji</Label>
                                     <select
-                                        id="preferred_channel"
+                                        id="preferred_language"
                                         className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
-                                        {...register('preferred_channel')}
+                                        {...register('preferred_language')}
                                     >
-                                        <option value="email">Email</option>
-                                        <option value="sms">SMS</option>
-                                        <option value="both">Email + SMS</option>
+                                        <option value="pl">🇵🇱 Polski</option>
+                                        <option value="en">🇬🇧 English</option>
                                     </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Wiadomości będą wysyłane w wybranym języku
+                                    </p>
                                 </div>
 
                                 {/* Default sequence selection */}

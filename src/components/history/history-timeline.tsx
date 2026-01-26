@@ -45,8 +45,7 @@ const getEventIcon = (type: string, status?: string) => {
         case 'step_executed':
         case 'email':
             return <Mail className="h-5 w-5 text-blue-500" />;
-        case 'sms':
-            return <MessageSquare className="h-5 w-5 text-purple-500" />;
+
         default:
             return <Clock className="h-5 w-5 text-muted-foreground" />;
     }
@@ -73,7 +72,7 @@ const eventTypeLabels: Record<string, string> = {
     'step_scheduled': 'Zaplanowane akcje',
     'step_executed': 'Wysłane wiadomości',
     'email': 'Emaile',
-    'sms': 'SMS-y',
+
 };
 
 export function HistoryTimeline({ events }: HistoryTimelineProps) {

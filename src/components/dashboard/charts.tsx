@@ -31,9 +31,9 @@ interface StatusChartProps {
 }
 
 interface ActivityChartProps {
-    data?: Array<{ day: string; emails: number; sms: number }>;
-    dailyData?: Array<{ hour: string; emails: number; sms: number }>;
-    monthlyData?: Array<{ week: string; emails: number; sms: number }>;
+    data?: Array<{ day: string; emails: number }>;
+    dailyData?: Array<{ hour: string; emails: number }>;
+    monthlyData?: Array<{ week: string; emails: number }>;
 }
 
 interface CashFlowProps {
@@ -53,11 +53,11 @@ const defaultStatusData = [
 ];
 
 const defaultActivityData = [
-    { day: 'Pon', emails: 0, sms: 0 },
-    { day: 'Wt', emails: 0, sms: 0 },
-    { day: 'Śr', emails: 0, sms: 0 },
-    { day: 'Czw', emails: 0, sms: 0 },
-    { day: 'Pt', emails: 0, sms: 0 },
+    { day: 'Pon', emails: 0 },
+    { day: 'Wt', emails: 0 },
+    { day: 'Śr', emails: 0 },
+    { day: 'Czw', emails: 0 },
+    { day: 'Pt', emails: 0 },
 ];
 
 const defaultPredictions = [
@@ -242,7 +242,7 @@ export function ActivityChart({ data, dailyData, monthlyData }: ActivityChartPro
     };
 
     const chartData = getChartData();
-    const hasData = chartData.some(d => d.emails > 0 || d.sms > 0);
+    const hasData = chartData.some(d => d.emails > 0);
 
     const getXAxisKey = () => {
         switch (period) {
@@ -302,7 +302,6 @@ export function ActivityChart({ data, dailyData, monthlyData }: ActivityChartPro
                             <Tooltip />
                             <Legend />
                             <Bar dataKey="emails" name="Email" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                            <Bar dataKey="sms" name="SMS" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
                         </BarChart>
                     </ResponsiveContainer>
                 )}

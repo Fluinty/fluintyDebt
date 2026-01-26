@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Plus, Trash2, GripVertical, Loader2, Save } from 'lucide-react';
@@ -18,52 +18,181 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { formatDaysOffset } from '@/lib/utils/format-date';
 import { toast } from 'sonner';
+import { createClient } from '@/lib/supabase/client';
+import { useParams } from 'next/navigation';
 
 interface SequenceStep {
     id: string;
     step_order: number;
     days_offset: number;
     channel: 'email' | 'sms' | 'both';
-    email_subject: string;
-    email_body: string;
-    sms_body?: string;
+    email_subject: string | null;
+    email_body: string | null;
+    email_subject_en: string | null;
+    email_body_en: string | null;
+    sms_body?: string | null;
+    sms_body_en?: string | null;
     include_payment_link: boolean;
     include_interest: boolean;
+    sequence_id?: string;
 }
 
-// Mock sequence for editing
-const mockSequence = {
-    id: '2',
-    name: 'Standardowa',
-    description: 'Domyślna sekwencja dla większości kontrahentów',
-    is_default: true,
-    steps: [
-        { id: '1', step_order: 1, days_offset: -7, channel: 'email' as const, email_subject: 'Przypomnienie o zbliżającym się terminie', email_body: 'Dzień dobry,\n\nUprzejmie przypominamy o zbliżającym się terminie płatności...', include_payment_link: false, include_interest: false },
-        { id: '2', step_order: 2, days_offset: -1, channel: 'email' as const, email_subject: 'Jutro mija termin płatności', email_body: 'Dzień dobry,\n\nPrzypominamy, że jutro mija termin płatności...', include_payment_link: true, include_interest: false },
-        { id: '3', step_order: 3, days_offset: 1, channel: 'email' as const, email_subject: 'Termin płatności minął', email_body: 'Dzień dobry,\n\nInformujemy, że wczoraj minął termin płatności...', include_payment_link: true, include_interest: false },
-        { id: '4', step_order: 4, days_offset: 7, channel: 'both' as const, email_subject: 'Wezwanie do zapłaty', email_body: 'Szanowni Państwo,\n\nFaktura jest przeterminowana o 7 dni...', sms_body: 'Faktura {{invoice_number}} przeterminowana. Prosimy o pilną wpłatę.', include_payment_link: true, include_interest: false },
-        { id: '5', step_order: 5, days_offset: 14, channel: 'email' as const, email_subject: 'WEZWANIE DO ZAPŁATY z odsetkami', email_body: 'Szanowni Państwo,\n\nPomimo wcześniejszych wezwań...', include_payment_link: true, include_interest: true },
-        { id: '6', step_order: 6, days_offset: 30, channel: 'email' as const, email_subject: 'OSTATECZNE WEZWANIE DO ZAPŁATY', email_body: 'Szanowni Państwo,\n\nNiniejszym wzywamy do NATYCHMIASTOWEJ zapłaty...', include_payment_link: true, include_interest: true },
-    ] as SequenceStep[],
-};
+interface Sequence {
+    id: string;
+    name: string;
+    description: string | null;
+    is_default: boolean;
+    steps: SequenceStep[];
+}
 
 export default function SequenceEditorPage() {
     const router = useRouter();
+    const params = useParams();
+    const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [sequence, setSequence] = useState(mockSequence);
-    const [selectedStep, setSelectedStep] = useState<SequenceStep | null>(mockSequence.steps[0]);
+    const [sequence, setSequence] = useState<Sequence | null>(null);
+    const [originalSteps, setOriginalSteps] = useState<SequenceStep[]>([]);
+    const [selectedStep, setSelectedStep] = useState<SequenceStep | null>(null);
+    const [activeTab, setActiveTab] = useState<'pl' | 'en'>('pl');
+
+    useEffect(() => {
+        const fetchSequence = async () => {
+            try {
+                const supabase = createClient();
+                const sequenceId = params.id as string;
+
+                // Fetch sequence
+                const { data: seqData, error: seqError } = await supabase
+                    .from('sequences')
+                    .select('*')
+                    .eq('id', sequenceId)
+                    .single();
+
+                if (seqError) throw seqError;
+
+                // Fetch steps
+                const { data: stepsData, error: stepsError } = await supabase
+                    .from('sequence_steps')
+                    .select('*')
+                    .eq('sequence_id', sequenceId)
+                    .order('step_order', { ascending: true });
+
+                if (stepsError) throw stepsError;
+
+                const loadedSequence = {
+                    ...seqData,
+                    steps: stepsData || []
+                };
+
+                setSequence(loadedSequence);
+                setOriginalSteps(JSON.parse(JSON.stringify(stepsData || [])));
+
+                if (stepsData && stepsData.length > 0) {
+                    setSelectedStep(stepsData[0]);
+                }
+            } catch (error) {
+                console.error('Error fetching sequence:', error);
+                toast.error('Nie udało się załadować sekwencji');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        if (params.id) {
+            fetchSequence();
+        }
+    }, [params.id]);
 
     const handleSave = async () => {
+        if (!sequence) return;
         setIsSaving(true);
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setIsSaving(false);
-        toast.success('Sekwencja została zapisana');
+        const supabase = createClient();
+
+        try {
+            // Update sequence details
+            const { error: seqError } = await supabase
+                .from('sequences')
+                .update({
+                    name: sequence.name,
+                    description: sequence.description
+                })
+                .eq('id', sequence.id);
+
+            if (seqError) throw seqError;
+
+            // Handle steps updates
+            // 1. Delete removed steps
+            const currentStepIds = sequence.steps.filter(s => !s.id.startsWith('new-')).map(s => s.id);
+            const stepsToDelete = originalSteps.filter(s => !currentStepIds.includes(s.id));
+
+            if (stepsToDelete.length > 0) {
+                const { error: deleteError } = await supabase
+                    .from('sequence_steps')
+                    .delete()
+                    .in('id', stepsToDelete.map(s => s.id));
+                if (deleteError) throw deleteError;
+            }
+
+            // 2. Upsert current steps
+            const stepsToUpsert = sequence.steps.map((step, index) => {
+                const stepData = {
+                    sequence_id: sequence.id,
+                    step_order: index + 1,
+                    days_offset: step.days_offset,
+                    channel: step.channel,
+                    email_subject: step.email_subject,
+                    email_body: step.email_body,
+                    email_subject_en: step.email_subject_en,
+                    email_body_en: step.email_body_en,
+                    sms_body: step.sms_body,
+                    sms_body_en: step.sms_body_en,
+                    include_payment_link: step.include_payment_link,
+                    include_interest: step.include_interest
+                };
+
+                // Remove temp ID for new items so DB generates real UUID
+                if (step.id.startsWith('new-')) {
+                    return stepData;
+                }
+                return { ...stepData, id: step.id };
+            });
+
+            const { data: savedSteps, error: stepsError } = await supabase
+                .from('sequence_steps')
+                .upsert(stepsToUpsert)
+                .select();
+
+            if (stepsError) throw stepsError;
+
+            // Update local state
+            if (savedSteps) {
+                const updatedSequence = { ...sequence, steps: savedSteps };
+                setSequence(updatedSequence);
+                setOriginalSteps(JSON.parse(JSON.stringify(savedSteps)));
+                // Update selected step ID reference if it was a new one
+                if (selectedStep && selectedStep.id.startsWith('new-')) {
+                    // This part is tricky because we don't know which new ID maps to which step easily
+                    // For now just select the first step to be safe
+                    setSelectedStep(savedSteps[0]);
+                }
+            }
+
+            toast.success('Zmiany zostały zapisane');
+            router.refresh();
+        } catch (error: any) {
+            console.error('Error saving sequence:', error);
+            toast.error('Błąd zapisu: ' + (error?.message || 'Nieznany błąd'));
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const addStep = () => {
+        if (!sequence) return;
         const lastStep = sequence.steps[sequence.steps.length - 1];
         const newStep: SequenceStep = {
             id: `new-${Date.now()}`,
@@ -72,14 +201,18 @@ export default function SequenceEditorPage() {
             channel: 'email',
             email_subject: '',
             email_body: '',
+            email_subject_en: '',
+            email_body_en: '',
             include_payment_link: true,
             include_interest: false,
         };
-        setSequence({ ...sequence, steps: [...sequence.steps, newStep] });
+        const updatedSteps = [...sequence.steps, newStep];
+        setSequence({ ...sequence, steps: updatedSteps });
         setSelectedStep(newStep);
     };
 
     const removeStep = (stepId: string) => {
+        if (!sequence) return;
         const newSteps = sequence.steps
             .filter((s) => s.id !== stepId)
             .map((s, i) => ({ ...s, step_order: i + 1 }));
@@ -90,13 +223,32 @@ export default function SequenceEditorPage() {
     };
 
     const updateStep = (updates: Partial<SequenceStep>) => {
-        if (!selectedStep) return;
+        if (!selectedStep || !sequence) return;
         const newSteps = sequence.steps.map((s) =>
             s.id === selectedStep.id ? { ...s, ...updates } : s
         );
         setSequence({ ...sequence, steps: newSteps });
         setSelectedStep({ ...selectedStep, ...updates });
     };
+
+    if (isLoading) {
+        return (
+            <div className="flex h-[50vh] items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    if (!sequence) {
+        return (
+            <div className="flex bg-background h-[50vh] flex-col items-center justify-center gap-4">
+                <h2 className="text-xl font-semibold">Nie znaleziono sekwencji</h2>
+                <Link href="/sequences">
+                    <Button>Wróć do listy</Button>
+                </Link>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -111,8 +263,17 @@ export default function SequenceEditorPage() {
                         </Button>
                     </Link>
                     <div>
-                        <h1 className="text-3xl font-bold">{sequence.name}</h1>
-                        <p className="text-muted-foreground mt-1">{sequence.description}</p>
+                        <Input
+                            value={sequence.name}
+                            onChange={(e) => setSequence({ ...sequence, name: e.target.value })}
+                            className="text-2xl font-bold h-auto px-2 py-1 border-transparent hover:border-input focus:border-input w-[300px]"
+                        />
+                        <Input
+                            value={sequence.description || ''}
+                            onChange={(e) => setSequence({ ...sequence, description: e.target.value })}
+                            className="text-muted-foreground h-auto px-2 py-1 text-sm border-transparent hover:border-input focus:border-input mt-1"
+                            placeholder="Dodaj opis..."
+                        />
                     </div>
                 </div>
                 <Button onClick={handleSave} disabled={isSaving}>
@@ -126,7 +287,7 @@ export default function SequenceEditorPage() {
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Steps list */}
-                <Card>
+                <Card className="h-fit">
                     <CardHeader>
                         <CardTitle>Kroki ({sequence.steps.length})</CardTitle>
                         <CardDescription>Kliknij aby edytować</CardDescription>
@@ -142,11 +303,16 @@ export default function SequenceEditorPage() {
                                 <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm truncate">
-                                        {step.step_order}. {step.email_subject || '(Bez tytułu)'}
+                                        {step.step_order}. {step.email_subject || step.email_subject_en || '(Bez tytułu)'}
                                     </p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {formatDaysOffset(step.days_offset)} • {step.channel === 'both' ? 'Email + SMS' : step.channel.toUpperCase()}
-                                    </p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                            {formatDaysOffset(step.days_offset)}
+                                        </Badge>
+                                        <span className="text-xs text-muted-foreground uppercase">
+                                            Email
+                                        </span>
+                                    </div>
                                 </div>
                                 <Button
                                     variant="ghost"
@@ -168,14 +334,24 @@ export default function SequenceEditorPage() {
                 {/* Step editor */}
                 <Card className="lg:col-span-2">
                     <CardHeader>
-                        <CardTitle>
-                            {selectedStep ? `Krok ${selectedStep.step_order}` : 'Wybierz krok'}
-                        </CardTitle>
+                        <div className="flex items-center justify-between">
+                            <CardTitle>
+                                {selectedStep ? `Edycja kroku ${selectedStep.step_order}` : 'Wybierz krok'}
+                            </CardTitle>
+                            {selectedStep && (
+                                <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'pl' | 'en')} className="w-[200px]">
+                                    <TabsList className="grid w-full grid-cols-2">
+                                        <TabsTrigger value="pl">🇵🇱 Polski</TabsTrigger>
+                                        <TabsTrigger value="en">🇬🇧 English</TabsTrigger>
+                                    </TabsList>
+                                </Tabs>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {selectedStep ? (
                             <>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 gap-4 border-b pb-6">
                                     <div className="space-y-2">
                                         <Label>Dzień wysyłki</Label>
                                         <Input
@@ -187,59 +363,58 @@ export default function SequenceEditorPage() {
                                             {formatDaysOffset(selectedStep.days_offset)}
                                         </p>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Kanał</Label>
-                                        <Select
-                                            value={selectedStep.channel}
-                                            onValueChange={(v) => updateStep({ channel: v as any })}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="email">Email</SelectItem>
-                                                <SelectItem value="sms">SMS</SelectItem>
-                                                <SelectItem value="both">Email + SMS</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <Label>Temat emaila</Label>
-                                    <Input
-                                        value={selectedStep.email_subject}
-                                        onChange={(e) => updateStep({ email_subject: e.target.value })}
-                                        placeholder="np. Przypomnienie o płatności"
-                                    />
-                                </div>
 
-                                <div className="space-y-2">
-                                    <Label>Treść emaila</Label>
-                                    <Textarea
-                                        value={selectedStep.email_body}
-                                        onChange={(e) => updateStep({ email_body: e.target.value })}
-                                        rows={8}
-                                        className="font-mono text-sm"
-                                    />
-                                </div>
+                                <Tabs value={activeTab} className="w-full">
+                                    <TabsContent value="pl" className="space-y-4 mt-0">
+                                        <div className="space-y-2">
+                                            <Label>Temat emaila (PL)</Label>
+                                            <Input
+                                                value={selectedStep.email_subject || ''}
+                                                onChange={(e) => updateStep({ email_subject: e.target.value })}
+                                                placeholder="np. Przypomnienie o płatności"
+                                            />
+                                        </div>
 
-                                {(selectedStep.channel === 'sms' || selectedStep.channel === 'both') && (
-                                    <div className="space-y-2">
-                                        <Label>Treść SMS (max 160 znaków)</Label>
-                                        <Textarea
-                                            value={selectedStep.sms_body || ''}
-                                            onChange={(e) => updateStep({ sms_body: e.target.value })}
-                                            rows={2}
-                                            maxLength={160}
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            {(selectedStep.sms_body || '').length}/160 znaków
-                                        </p>
-                                    </div>
-                                )}
+                                        <div className="space-y-2">
+                                            <Label>Treść emaila (PL)</Label>
+                                            <Textarea
+                                                value={selectedStep.email_body || ''}
+                                                onChange={(e) => updateStep({ email_body: e.target.value })}
+                                                rows={10}
+                                                className="font-mono text-sm"
+                                            />
+                                        </div>
 
-                                <div className="flex flex-wrap gap-6">
+
+                                    </TabsContent>
+
+                                    <TabsContent value="en" className="space-y-4 mt-0">
+                                        <div className="space-y-2">
+                                            <Label>Temat emaila (EN)</Label>
+                                            <Input
+                                                value={selectedStep.email_subject_en || ''}
+                                                onChange={(e) => updateStep({ email_subject_en: e.target.value })}
+                                                placeholder="e.g. Payment Reminder"
+                                            />
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Treść emaila (EN)</Label>
+                                            <Textarea
+                                                value={selectedStep.email_body_en || ''}
+                                                onChange={(e) => updateStep({ email_body_en: e.target.value })}
+                                                rows={10}
+                                                className="font-mono text-sm"
+                                            />
+                                        </div>
+
+
+                                    </TabsContent>
+                                </Tabs>
+
+                                <div className="flex flex-wrap gap-6 pt-4 border-t">
                                     <div className="flex items-center gap-2">
                                         <Switch
                                             checked={selectedStep.include_payment_link}
@@ -256,11 +431,11 @@ export default function SequenceEditorPage() {
                                     </div>
                                 </div>
 
-                                <div className="pt-4 border-t">
-                                    <p className="text-sm font-medium mb-2">Dostępne placeholdery:</p>
+                                <div className="bg-muted/50 p-4 rounded-lg mt-4">
+                                    <p className="text-sm font-medium mb-2">Dostępne zmienne (do użycia w szablonach):</p>
                                     <div className="flex flex-wrap gap-2">
-                                        {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}'].map((ph) => (
-                                            <Badge key={ph} variant="outline" className="font-mono text-xs">
+                                        {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}', '{{company_name}}', '{{amount_with_interest}}', '{{interest_amount}}'].map((ph) => (
+                                            <Badge key={ph} variant="secondary" className="font-mono text-xs cursor-copy hover:bg-muted-foreground/20">
                                                 {ph}
                                             </Badge>
                                         ))}
@@ -268,9 +443,10 @@ export default function SequenceEditorPage() {
                                 </div>
                             </>
                         ) : (
-                            <p className="text-muted-foreground text-center py-8">
-                                Wybierz krok z listy po lewej stronie
-                            </p>
+                            <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                                <GripVertical className="h-12 w-12 mb-4 opacity-20" />
+                                <p>Wybierz krok z listy po lewej stronie aby go edytować</p>
+                            </div>
                         )}
                     </CardContent>
                 </Card>

@@ -94,7 +94,7 @@ export default async function HistoryPage() {
         scheduledSteps.forEach(step => {
             const invoice = step.invoices as any;
             const seqStep = step.sequence_steps as any;
-            const channel = seqStep?.channel === 'sms' ? 'SMS' : seqStep?.channel === 'both' ? 'Email i SMS' : 'Email';
+            const channel = 'Email';
 
             let status: 'success' | 'pending' | 'failed' = 'pending';
             let title = 'Zaplanowane przypomnienie';

@@ -7,7 +7,7 @@ export interface ScheduledStepUpdateData {
     scheduled_for?: string;
     override_email_subject?: string;
     override_email_body?: string;
-    override_channel?: 'email' | 'sms';
+    override_channel?: 'email';
     notes?: string;
     status?: 'pending' | 'executed' | 'skipped' | 'cancelled' | 'failed';
 }

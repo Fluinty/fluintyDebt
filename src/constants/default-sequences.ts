@@ -34,6 +34,15 @@ Jeśli płatność została już zrealizowana, prosimy zignorować tę wiadomoś
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'Reminder - Payment due soon',
+            email_body_en: `Dear Customer,
+
+This is a friendly reminder that payment for invoice {{invoice_number}} in the amount of {{amount}} is due in 3 days.
+
+If you have already made the payment, please disregard this message.
+
+Best regards,
+{{company_name}}`,
             include_payment_link: false,
             include_interest: false,
         },
@@ -51,6 +60,17 @@ Prosimy o uregulowanie należności w najbliższym możliwym terminie.
 {{payment_link}}
 
 Z poważaniem,
+{{company_name}}`,
+            email_subject_en: 'Payment overdue notification',
+            email_body_en: `Dear Customer,
+
+Please be advised that invoice {{invoice_number}} for {{amount}} is now {{days_overdue}} days past due.
+
+We kindly ask you to settle this payment at your earliest convenience.
+
+{{payment_link}}
+
+Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
@@ -74,6 +94,21 @@ Prosimy o pilne uregulowanie należności.
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'Payment Request - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+Invoice {{invoice_number}} remains unpaid for {{days_overdue}} days.
+
+Principal amount: {{amount}}
+Accrued interest: {{interest_amount}}
+TOTAL: {{amount_with_interest}}
+
+Please settle this amount urgently.
+
+{{payment_link}}
+
+Best regards,
+{{company_name}}`,
             include_payment_link: true,
             include_interest: true,
         },
@@ -91,6 +126,20 @@ Naliczone odsetki: {{interest_amount}}
 RAZEM DO ZAPŁATY: {{amount_with_interest}}
 
 Jest to ostateczne wezwanie przed przekazaniem sprawy do dalszego postępowania.
+
+{{payment_link}}
+
+{{company_name}}`,
+            email_subject_en: 'Final Payment Notice - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+Despite previous reminders, invoice {{invoice_number}} remains unpaid.
+
+Principal amount: {{amount}}
+Accrued interest: {{interest_amount}}
+TOTAL DUE: {{amount_with_interest}}
+
+This is a final notice before further collection action is taken.
 
 {{payment_link}}
 
@@ -123,6 +172,15 @@ Jeśli płatność została już zrealizowana, prosimy zignorować tę wiadomoś
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'Payment reminder - Due in one week',
+            email_body_en: `Dear Customer,
+
+This is a friendly reminder that payment for invoice {{invoice_number}} in the amount of {{amount}} is due on {{due_date}}.
+
+If you have already made the payment, please disregard this message.
+
+Best regards,
+{{company_name}}`,
             include_payment_link: false,
             include_interest: false,
         },
@@ -140,6 +198,17 @@ Aby uniknąć naliczania odsetek, prosimy o terminową wpłatę.
 {{payment_link}}
 
 Z poważaniem,
+{{company_name}}`,
+            email_subject_en: 'Payment due tomorrow - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+This is a reminder that invoice {{invoice_number}} for {{amount}} is due tomorrow ({{due_date}}).
+
+To avoid interest charges, please make your payment on time.
+
+{{payment_link}}
+
+Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
@@ -159,13 +228,24 @@ Prosimy o pilne uregulowanie należności.
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'Payment overdue - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+Please be advised that invoice {{invoice_number}} for {{amount}} was due yesterday.
+
+We kindly ask you to settle this payment promptly.
+
+{{payment_link}}
+
+Best regards,
+{{company_name}}`,
             include_payment_link: true,
             include_interest: false,
         },
         {
             step_order: 4,
             days_offset: 7,
-            channel: 'both',
+            channel: 'email',
             email_subject: 'Wezwanie do zapłaty - faktura przeterminowana',
             email_body: `Szanowni Państwo,
 
@@ -179,7 +259,20 @@ Prosimy o niezwłoczne uregulowanie należności. W przypadku problemów z płat
 
 Z poważaniem,
 {{company_name}}`,
-            sms_body: 'Faktura {{invoice_number}} przeterminowana o {{days_overdue}} dni. Kwota: {{amount}}. Prosimy o pilną wpłatę. {{company_name}}',
+            email_subject_en: 'Payment Request - Invoice Overdue',
+            email_body_en: `Dear Customer,
+
+Invoice {{invoice_number}} is now {{days_overdue}} days overdue.
+
+Amount due: {{amount}}
+
+Please settle this payment immediately. If you are experiencing payment difficulties, please contact us to arrange a payment plan.
+
+{{payment_link}}
+
+Best regards,
+{{company_name}}`,
+
             include_payment_link: true,
             include_interest: false,
         },
@@ -202,6 +295,21 @@ Prosimy o uregulowanie pełnej kwoty w ciągu 7 dni.
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'PAYMENT DEMAND with interest - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+Despite previous requests, invoice {{invoice_number}} remains unpaid.
+
+Principal amount: {{amount}}
+Accrued interest: {{interest_amount}}
+TOTAL DUE: {{amount_with_interest}}
+
+Please settle the full amount within 7 days.
+
+{{payment_link}}
+
+Best regards,
+{{company_name}}`,
             include_payment_link: true,
             include_interest: true,
         },
@@ -219,6 +327,20 @@ Naliczone odsetki: {{interest_amount}}
 RAZEM DO ZAPŁATY: {{amount_with_interest}}
 
 W przypadku braku wpłaty w terminie 7 dni od otrzymania niniejszego wezwania, sprawa zostanie przekazana do dalszego postępowania windykacyjnego, co wiązać się będzie z dodatkowymi kosztami.
+
+{{payment_link}}
+
+{{company_name}}`,
+            email_subject_en: 'FINAL PAYMENT DEMAND - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+We hereby demand IMMEDIATE payment of the outstanding amount for invoice {{invoice_number}}.
+
+Principal amount: {{amount}}
+Accrued interest: {{interest_amount}}
+TOTAL DUE: {{amount_with_interest}}
+
+Failure to pay within 7 days of receiving this notice will result in the matter being referred for further collection action, which will incur additional costs.
 
 {{payment_link}}
 
@@ -249,13 +371,20 @@ Przypominamy o zbliżającym się terminie płatności faktury nr {{invoice_numb
 
 Z poważaniem,
 {{company_name}}`,
+            email_subject_en: 'Payment reminder - Due date approaching',
+            email_body_en: `Dear Customer,
+
+This is a reminder that invoice {{invoice_number}} for {{amount}} is due on {{due_date}}.
+
+Best regards,
+{{company_name}}`,
             include_payment_link: true,
             include_interest: false,
         },
         {
             step_order: 2,
             days_offset: -1,
-            channel: 'both',
+            channel: 'email',
             email_subject: 'PILNE: Jutro termin płatności - {{invoice_number}}',
             email_body: `Dzień dobry,
 
@@ -264,7 +393,16 @@ PILNE: Jutro mija termin płatności faktury nr {{invoice_number}} na kwotę {{a
 {{payment_link}}
 
 {{company_name}}`,
+            email_subject_en: 'URGENT: Payment due tomorrow - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+URGENT: Invoice {{invoice_number}} for {{amount}} is due tomorrow.
+
+{{payment_link}}
+
+{{company_name}}`,
             sms_body: 'PILNE: Jutro {{due_date}} mija termin płatności FV {{invoice_number}} - {{amount}}. {{company_name}}',
+            sms_body_en: 'URGENT: Invoice {{invoice_number}} for {{amount}} is due tomorrow {{due_date}}. {{company_name}}',
             include_payment_link: true,
             include_interest: false,
         },
@@ -280,13 +418,21 @@ Termin płatności faktury nr {{invoice_number}} został przekroczony. Prosimy o
 {{payment_link}}
 
 {{company_name}}`,
+            email_subject_en: 'Payment overdue - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+Invoice {{invoice_number}} is now overdue. Please make an immediate payment of {{amount}}.
+
+{{payment_link}}
+
+{{company_name}}`,
             include_payment_link: true,
             include_interest: false,
         },
         {
             step_order: 4,
             days_offset: 3,
-            channel: 'both',
+            channel: 'email',
             email_subject: 'DRUGIE WEZWANIE - faktura {{invoice_number}}',
             email_body: `Szanowni Państwo,
 
@@ -299,7 +445,19 @@ Prosimy o pilny kontakt lub wpłatę.
 {{payment_link}}
 
 {{company_name}}`,
-            sms_body: 'DRUGIE WEZWANIE: FV {{invoice_number}} przeterminowana {{days_overdue}} dni. {{amount}}. Prosimy o kontakt. {{company_name}}',
+            email_subject_en: 'SECOND NOTICE - Invoice {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+This is our second notice regarding invoice {{invoice_number}}, which is now {{days_overdue}} days overdue.
+
+Amount: {{amount}}
+
+Please contact us or make payment immediately.
+
+{{payment_link}}
+
+{{company_name}}`,
+
             include_payment_link: true,
             include_interest: false,
         },
@@ -319,13 +477,25 @@ RAZEM: {{amount_with_interest}}
 {{payment_link}}
 
 {{company_name}}`,
+            email_subject_en: 'THIRD NOTICE with interest - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+This is our third notice regarding invoice {{invoice_number}}.
+
+Principal amount: {{amount}}
+Interest: {{interest_amount}}
+TOTAL: {{amount_with_interest}}
+
+{{payment_link}}
+
+{{company_name}}`,
             include_payment_link: true,
             include_interest: true,
         },
         {
             step_order: 6,
             days_offset: 14,
-            channel: 'both',
+            channel: 'email',
             email_subject: 'PRZEDOSTATNIE WEZWANIE - {{invoice_number}}',
             email_body: `Szanowni Państwo,
 
@@ -337,7 +507,18 @@ Należność z odsetkami: {{amount_with_interest}}
 {{payment_link}}
 
 {{company_name}}`,
-            sms_body: 'PRZEDOSTATNIE WEZWANIE: FV {{invoice_number}} - {{amount_with_interest}}. Następny krok: windykacja. {{company_name}}',
+            email_subject_en: 'PENULTIMATE NOTICE - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+This is our penultimate notice before the matter is referred for collection.
+
+Invoice: {{invoice_number}}
+Amount with interest: {{amount_with_interest}}
+
+{{payment_link}}
+
+{{company_name}}`,
+
             include_payment_link: true,
             include_interest: true,
         },
@@ -360,13 +541,28 @@ Brak wpłaty w ciągu 3 dni roboczych skutkować będzie wszczęciem postępowan
 {{payment_link}}
 
 {{company_name}}`,
+            email_subject_en: 'FINAL DEMAND - {{invoice_number}}',
+            email_body_en: `Dear Customer,
+
+FINAL PAYMENT DEMAND
+
+Invoice: {{invoice_number}}
+Principal amount: {{amount}}
+Interest: {{interest_amount}}
+TOTAL DUE: {{amount_with_interest}}
+
+Failure to pay within 3 business days will result in collection proceedings.
+
+{{payment_link}}
+
+{{company_name}}`,
             include_payment_link: true,
             include_interest: true,
         },
         {
             step_order: 8,
             days_offset: 30,
-            channel: 'both',
+            channel: 'email',
             email_subject: 'OSTATNIE OSTRZEŻENIE - przekazanie do windykacji',
             email_body: `Szanowni Państwo,
 
@@ -379,7 +575,19 @@ Jest to ostatnia szansa na polubowne rozwiązanie sprawy.
 {{payment_link}}
 
 {{company_name}}`,
-            sms_body: 'OSTATNIE OSTRZEŻENIE: FV {{invoice_number}} przekazujemy do windykacji. Prosimy o pilny kontakt. {{company_name}}',
+            email_subject_en: 'FINAL WARNING - Referral to collection agency',
+            email_body_en: `Dear Customer,
+
+Please be advised that the matter regarding invoice {{invoice_number}} for {{amount_with_interest}} will be referred to an external collection agency within the coming days.
+
+This will result in additional costs that will be charged to you.
+
+This is your last opportunity to resolve this matter amicably.
+
+{{payment_link}}
+
+{{company_name}}`,
+
             include_payment_link: true,
             include_interest: true,
         },

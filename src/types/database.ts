@@ -113,6 +113,9 @@ export type Database = {
                     email_subject: string | null;
                     email_body: string;
                     sms_body: string | null;
+                    email_subject_en: string | null;
+                    email_body_en: string | null;
+                    sms_body_en: string | null;
                     include_payment_link: boolean;
                     include_interest: boolean;
                     is_ai_generated: boolean;
@@ -128,6 +131,9 @@ export type Database = {
                     email_subject?: string | null;
                     email_body: string;
                     sms_body?: string | null;
+                    email_subject_en?: string | null;
+                    email_body_en?: string | null;
+                    sms_body_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
                     is_ai_generated?: boolean;
@@ -143,6 +149,9 @@ export type Database = {
                     email_subject?: string | null;
                     email_body?: string;
                     sms_body?: string | null;
+                    email_subject_en?: string | null;
+                    email_body_en?: string | null;
+                    sms_body_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
                     is_ai_generated?: boolean;
@@ -174,6 +183,7 @@ export type Database = {
                     auto_send_enabled: boolean;
                     preferred_send_time: string;
                     preferred_channel: 'email' | 'sms' | 'both';
+                    preferred_language: 'pl' | 'en';
                     created_at: string;
                     updated_at: string;
                 };
@@ -200,6 +210,7 @@ export type Database = {
                     auto_send_enabled?: boolean;
                     preferred_send_time?: string;
                     preferred_channel?: 'email' | 'sms' | 'both';
+                    preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -226,6 +237,7 @@ export type Database = {
                     auto_send_enabled?: boolean;
                     preferred_send_time?: string;
                     preferred_channel?: 'email' | 'sms' | 'both';
+                    preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;
                 };
