@@ -13,6 +13,7 @@ import { calculateInterest } from '@/lib/interest/calculate-interest';
 import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calculations';
 import { MarkAsPaidButton } from '@/components/invoices/mark-as-paid-button';
+import { SequenceControls } from '@/components/invoices/sequence-controls';
 import { SequenceStepsList } from '@/components/invoices/sequence-steps-list';
 import { InvoiceQuickActions } from '@/components/invoices/invoice-quick-actions';
 import { SequenceSelector } from '@/components/invoices/sequence-selector';
@@ -26,7 +27,7 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
         .from('invoices')
         .select(`
             *,
-            debtors (id, name, email, phone, nip),
+            debtors (id, name, email, phone, nip, preferred_language),
             sequences (id, name)
         `)
         .eq('id', id)
@@ -157,14 +158,10 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                                 </CardDescription>
                             </div>
                             <div className="flex gap-2">
-                                <Button variant="outline" size="sm">
-                                    <Pause className="h-4 w-4 mr-1" />
-                                    Wstrzymaj
-                                </Button>
-                                <Button variant="outline" size="sm">
-                                    <SkipForward className="h-4 w-4 mr-1" />
-                                    Pomiń krok
-                                </Button>
+                                <SequenceControls
+                                    invoiceId={invoice.id}
+                                    isPaused={invoice.auto_send_enabled === false}
+                                />
                             </div>
                         </CardHeader>
                         <CardContent>
@@ -203,6 +200,13 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                                 <p className="font-medium">{invoice.debtors?.name || 'Nieznany'}</p>
                                 {invoice.debtors?.nip && (
                                     <p className="text-sm text-muted-foreground">NIP: {invoice.debtors.nip}</p>
+                                )}
+                                {invoice.debtors?.preferred_language && (
+                                    <div className="mt-1">
+                                        <Badge variant="secondary" className="text-xs">
+                                            {invoice.debtors.preferred_language === 'pl' ? '🇵🇱 Polski' : '🇬🇧 English'}
+                                        </Badge>
+                                    </div>
                                 )}
                             </div>
                             <Separator />

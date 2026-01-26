@@ -11,6 +11,7 @@ interface HistoryEvent {
     title: string;
     description: string;
     date: string;
+    createdAt?: string;
     link?: string;
     status?: 'success' | 'pending' | 'failed';
 }
@@ -83,6 +84,7 @@ export default async function HistoryPage() {
         .select(`
             id,
             scheduled_for,
+            created_at,
             status,
             invoices(invoice_number, debtors(name)),
             sequence_steps(channel, email_subject)
@@ -118,6 +120,7 @@ export default async function HistoryPage() {
                 title,
                 description: `${invoice?.invoice_number || 'Faktura'} → ${invoice?.debtors?.name || 'kontrahent'}`,
                 date: step.scheduled_for,
+                createdAt: step.created_at,
                 link: '/scheduler',
                 status,
             });

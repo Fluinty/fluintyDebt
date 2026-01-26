@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 
 /**
  * Server action to create invoice with optional sequence scheduling
@@ -393,5 +394,74 @@ export async function changeInvoiceSequence(
         await supabase.from('scheduled_steps').insert(scheduledSteps);
     }
 
+    return { success: true };
+}
+
+/**
+ * Server action to toggle auto-send for an invoice
+ */
+export async function toggleInvoiceAutoSend(invoiceId: string, enabled: boolean) {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Unauthorized' };
+    }
+
+    const { error } = await supabase
+        .from('invoices')
+        .update({ auto_send_enabled: enabled })
+        .eq('id', invoiceId)
+        .eq('user_id', user.id);
+
+    if (error) {
+        return { error: error.message };
+    }
+
+    revalidatePath(`/invoices/${invoiceId}`);
+    return { success: true };
+}
+
+/**
+ * Server action to skip the next pending scheduled step
+ */
+export async function skipNextScheduledStep(invoiceId: string) {
+    const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+        return { error: 'Unauthorized' };
+    }
+
+    // Find the next pending step
+    const { data: steps, error: fetchError } = await supabase
+        .from('scheduled_steps')
+        .select('id')
+        .eq('invoice_id', invoiceId)
+        .eq('status', 'pending')
+        .order('scheduled_for', { ascending: true })
+        .limit(1);
+
+    if (fetchError) {
+        return { error: fetchError.message };
+    }
+
+    if (!steps || steps.length === 0) {
+        return { error: 'No pending steps to skip' };
+    }
+
+    const stepId = steps[0].id;
+
+    // Update status to skipped
+    const { error: updateError } = await supabase
+        .from('scheduled_steps')
+        .update({ status: 'skipped' })
+        .eq('id', stepId);
+
+    if (updateError) {
+        return { error: updateError.message };
+    }
+
+    revalidatePath(`/invoices/${invoiceId}`);
     return { success: true };
 }

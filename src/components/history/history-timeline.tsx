@@ -22,6 +22,7 @@ interface HistoryEvent {
     title: string;
     description: string;
     date: string;
+    createdAt?: string;
     link?: string;
     status?: 'success' | 'pending' | 'failed';
 }
@@ -181,9 +182,15 @@ export function HistoryTimeline({ events }: HistoryTimelineProps) {
                                             </div>
                                             {getStatusBadge(event.status)}
                                         </div>
-                                        <p className="text-xs text-muted-foreground mt-2">
-                                            {formatDate(event.date)}
-                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2">
+                                            <p>Data: {formatDate(event.date)}</p>
+                                            {event.createdAt && (
+                                                <>
+                                                    <span className="text-border">|</span>
+                                                    <p>Utworzono: {formatDate(event.createdAt)}</p>
+                                                </>
+                                            )}
+                                        </div>
                                         {event.link && (
                                             <Link
                                                 href={event.link}

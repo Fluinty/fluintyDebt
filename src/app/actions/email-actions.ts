@@ -49,8 +49,9 @@ export async function executeScheduledStep(stepId: string) {
         return { error: 'Nie znaleziono kroku' };
     }
 
-    if (step.status !== 'pending') {
-        return { error: `Krok ma status "${step.status}" - można wykonać tylko oczekujące` };
+    const allowedStatuses = ['pending', 'skipped', 'failed'];
+    if (!allowedStatuses.includes(step.status)) {
+        return { error: `Krok ma status "${step.status}" - można wykonać tylko kroki oczekujące, pominięte lub nieudane` };
     }
 
     const invoice = step.invoices as any;

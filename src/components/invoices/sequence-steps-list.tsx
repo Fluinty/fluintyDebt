@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,11 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
     const [stepStatuses, setStepStatuses] = useState<Record<string, string>>(() =>
         Object.fromEntries(steps.map(s => [s.id, s.status]))
     );
+
+    // Sync local state with props when they change (e.g. after refresh)
+    useEffect(() => {
+        setStepStatuses(Object.fromEntries(steps.map(s => [s.id, s.status])));
+    }, [steps]);
 
     // Get current status (use local state, fallback to original)
     const getStepStatus = (stepId: string, originalStatus: string) =>
@@ -138,9 +143,9 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                 const isLoading = loadingStepId === step.id;
                 // Use local status for immediate UI updates
                 const currentStatus = getStepStatus(step.id, step.status);
-                const isPending = currentStatus === 'pending';
+                const canExecute = currentStatus === 'pending' || currentStatus === 'skipped' || currentStatus === 'failed';
                 const isCompleted = currentStatus === 'sent' || currentStatus === 'executed';
-                const isCancelled = currentStatus === 'cancelled' || currentStatus === 'skipped';
+                const isCancelled = currentStatus === 'cancelled';
 
                 // Replace placeholders in subject for preview
                 const displaySubject = seqStep?.email_subject
@@ -170,7 +175,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                                     <Badge variant={isCompleted ? 'default' : 'outline'}>
                                         {getStatusLabel(currentStatus)}
                                     </Badge>
-                                    {isPending && (
+                                    {canExecute && (
                                         <>
                                             <EditStepButton stepId={step.id} />
                                             <Button
@@ -187,7 +192,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                                                 ) : (
                                                     <>
                                                         <Send className="h-4 w-4 mr-1" />
-                                                        Wyślij
+                                                        {currentStatus === 'pending' ? 'Wyślij' : 'Wyślij ręcznie'}
                                                     </>
                                                 )}
                                             </Button>
