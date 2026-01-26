@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Calendar, Mail, MessageSquare, Trash2 } from 'lucide-react';
+import { Loader2, Calendar, Mail, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,13 +15,6 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -53,7 +46,7 @@ export function EditScheduledStepModal({ stepId, open, onOpenChange }: EditSched
         scheduled_for: '',
         override_email_subject: '',
         override_email_body: '',
-        override_channel: '' as '' | 'email' | 'sms',
+        override_channel: '' as '' | 'email',
         notes: '',
     });
 
@@ -180,39 +173,7 @@ export function EditScheduledStepModal({ stepId, open, onOpenChange }: EditSched
                                 />
                             </div>
 
-                            {/* Channel */}
-                            <div className="space-y-2">
-                                <Label>Kanał komunikacji</Label>
-                                <Select
-                                    value={formData.override_channel || originalChannel}
-                                    onValueChange={(value: 'email' | 'sms') =>
-                                        setFormData({ ...formData, override_channel: value })
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="email">
-                                            <span className="flex items-center gap-2">
-                                                <Mail className="h-4 w-4" />
-                                                Email
-                                            </span>
-                                        </SelectItem>
-                                        <SelectItem value="sms">
-                                            <span className="flex items-center gap-2">
-                                                <MessageSquare className="h-4 w-4" />
-                                                SMS
-                                            </span>
-                                        </SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                {!formData.override_channel && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Domyślnie z sekwencji: {originalChannel}
-                                    </p>
-                                )}
-                            </div>
+
 
                             {/* Email subject */}
                             <div className="space-y-2">

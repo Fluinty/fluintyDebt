@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, MessageSquare, Edit } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -163,13 +163,7 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                                     <p className="font-medium">{displaySubject}</p>
                                     <p className="text-sm text-muted-foreground">{formatDate(step.scheduled_for)}</p>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        {seqStep?.channel === 'email' ? (
-                                            <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> Email</span>
-                                        ) : seqStep?.channel === 'sms' ? (
-                                            <span className="flex items-center gap-1"><MessageSquare className="h-3 w-3" /> SMS</span>
-                                        ) : (
-                                            <span>📧 Email + 📱 SMS</span>
-                                        )}
+                                        <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> Email</span>
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">

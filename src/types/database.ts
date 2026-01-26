@@ -109,7 +109,7 @@ export type Database = {
                     sequence_id: string;
                     step_order: number;
                     days_offset: number;
-                    channel: 'email' | 'sms' | 'both';
+                    channel: 'email';
                     email_subject: string | null;
                     email_body: string;
                     sms_body: string | null;
@@ -127,7 +127,7 @@ export type Database = {
                     sequence_id: string;
                     step_order: number;
                     days_offset: number;
-                    channel: 'email' | 'sms' | 'both';
+                    channel: 'email';
                     email_subject?: string | null;
                     email_body: string;
                     sms_body?: string | null;
@@ -145,7 +145,7 @@ export type Database = {
                     sequence_id?: string;
                     step_order?: number;
                     days_offset?: number;
-                    channel?: 'email' | 'sms' | 'both';
+                    channel?: 'email';
                     email_subject?: string | null;
                     email_body?: string;
                     sms_body?: string | null;
@@ -182,7 +182,7 @@ export type Database = {
                     notes: string | null;
                     auto_send_enabled: boolean;
                     preferred_send_time: string;
-                    preferred_channel: 'email' | 'sms' | 'both';
+                    preferred_channel: 'email';
                     preferred_language: 'pl' | 'en';
                     created_at: string;
                     updated_at: string;
@@ -209,7 +209,7 @@ export type Database = {
                     notes?: string | null;
                     auto_send_enabled?: boolean;
                     preferred_send_time?: string;
-                    preferred_channel?: 'email' | 'sms' | 'both';
+                    preferred_channel?: 'email';
                     preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;
@@ -236,7 +236,7 @@ export type Database = {
                     notes?: string | null;
                     auto_send_enabled?: boolean;
                     preferred_send_time?: string;
-                    preferred_channel?: 'email' | 'sms' | 'both';
+                    preferred_channel?: 'email';
                     preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;

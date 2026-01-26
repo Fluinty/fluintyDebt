@@ -16,7 +16,7 @@ export type SequenceStatus = 'active' | 'paused' | 'completed' | 'stopped';
 /**
  * Channel options for sequence steps
  */
-export type Channel = 'email' | 'sms' | 'both';
+export type Channel = 'email';
 
 /**
  * Payment score ranges

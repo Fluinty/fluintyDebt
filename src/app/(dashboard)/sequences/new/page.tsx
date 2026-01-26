@@ -24,7 +24,7 @@ import { createClient } from '@/lib/supabase/client';
 interface NewStep {
     id: string;
     days_offset: number;
-    channel: 'email' | 'sms' | 'both';
+    channel: 'email';
     email_subject: string;
     email_body: string;
 }
@@ -319,19 +319,9 @@ export default function NewSequencePage() {
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Kanał</Label>
-                                        <Select
-                                            value={step.channel}
-                                            onValueChange={(v) => updateStep(step.id, { channel: v as any })}
-                                        >
-                                            <SelectTrigger>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="email">Email</SelectItem>
-                                                <SelectItem value="sms">SMS</SelectItem>
-                                                <SelectItem value="both">Email + SMS</SelectItem>
-                                            </SelectContent>
-                                        </Select>
+                                        <div className="h-10 px-3 py-2 border rounded-md bg-muted text-muted-foreground flex items-center">
+                                            Email
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Temat emaila</Label>

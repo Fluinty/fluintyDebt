@@ -29,13 +29,11 @@ interface SequenceStep {
     id: string;
     step_order: number;
     days_offset: number;
-    channel: 'email' | 'sms' | 'both';
+    channel: 'email';
     email_subject: string | null;
     email_body: string | null;
     email_subject_en: string | null;
     email_body_en: string | null;
-    sms_body?: string | null;
-    sms_body_en?: string | null;
     include_payment_link: boolean;
     include_interest: boolean;
     sequence_id?: string;
@@ -143,13 +141,11 @@ export default function SequenceEditorPage() {
                     sequence_id: sequence.id,
                     step_order: index + 1,
                     days_offset: step.days_offset,
-                    channel: step.channel,
+                    channel: 'email',
                     email_subject: step.email_subject,
                     email_body: step.email_body,
                     email_subject_en: step.email_subject_en,
                     email_body_en: step.email_body_en,
-                    sms_body: step.sms_body,
-                    sms_body_en: step.sms_body_en,
                     include_payment_link: step.include_payment_link,
                     include_interest: step.include_interest
                 };

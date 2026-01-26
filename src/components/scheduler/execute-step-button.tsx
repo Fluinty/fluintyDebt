@@ -23,7 +23,7 @@ export function ExecuteStepButton({ stepId, status, channel }: ExecuteStepButton
             const result = await executeScheduledStep(stepId);
 
             if (result.success) {
-                toast.success(`${channel === 'sms' ? 'SMS' : 'Email'} wysłany pomyślnie!`);
+                toast.success('Email wysłany pomyślnie!');
                 router.refresh();
             } else {
                 toast.error(result.error || 'Błąd wysyłki');
