@@ -65,7 +65,7 @@ export async function createCostInvoice(data: CreateCostInvoiceInput) {
     } catch (error) {
         console.error('Create cost invoice error:', error);
         if (error instanceof z.ZodError) {
-            return { error: error.errors[0].message };
+            return { error: error.issues[0]?.message || 'Validation error' };
         }
         return { error: 'Failed to create invoice' };
     }
