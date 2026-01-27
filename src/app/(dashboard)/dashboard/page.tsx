@@ -3,40 +3,50 @@ import { Button } from '@/components/ui/button';
 import {
     TrendingUp,
     Clock,
-    CheckCircle,
     AlertTriangle,
     Plus,
     ArrowRight,
-    History,
-    Sparkles,
     FileText,
-    Users,
     Mail,
     Edit,
+    TrendingDown,
+    Lock,
+    Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calculations';
-import { formatDate } from '@/lib/utils/format-date';
 import { StatusBadge } from '@/components/invoices/status-badge';
-import { ReceivablesChart, StatusPieChart, ActivityChart, CashFlowPrediction } from '@/components/dashboard/charts';
+import { ReceivablesChart } from '@/components/dashboard/charts';
+import { CostTrendChart } from '@/components/dashboard/cost-charts';
+import { BankAccountWidget } from '@/components/dashboard/bank-account-widget';
+import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
+import { UpcomingWeek } from '@/components/dashboard/upcoming-week';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
 
     // Fetch user profile
     const { data: { user } } = await supabase.auth.getUser();
+
+    // Fetch profile with current_balance
     const { data: profile } = await supabase
         .from('profiles')
-        .select('full_name')
+        .select('*')
         .eq('id', user?.id)
         .single();
 
-    // Fetch real stats from database
+    // Fetch real stats from database (Sales)
     const { data: invoices } = await supabase
         .from('invoices')
-        .select('id, invoice_number, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date, debtor_id, debtors(name)')
+        .select('id, invoice_number, amount, amount_net, vat_rate, vat_amount, amount_gross, amount_paid, status, due_date, issue_date, debtor_id, debtors(name)') // Added issue_date
+        .order('due_date', { ascending: true });
+
+    // Fetch cost invoices
+    const { data: costInvoices } = await supabase
+        .from('cost_invoices')
+        .select('*')
         .order('due_date', { ascending: true });
 
     const { data: debtors } = await supabase
@@ -50,20 +60,12 @@ export default async function DashboardPage() {
         .eq('user_id', user?.id)
         .single();
 
-    // Fetch sent messages for ActivityChart (last 7 days)
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const { data: sentActions } = await supabase
-        .from('collection_actions')
-        .select('action_type, sent_at, created_at')
-        .eq('status', 'sent')
-        .gte('created_at', sevenDaysAgo.toISOString());
-
     const invoicesList = (invoices || []).map(inv => ({
         ...inv,
         calculatedStatus: getActualInvoiceStatus(inv),
         daysOverdue: getDaysOverdue(inv.due_date),
     }));
+    const costInvoicesList = costInvoices || [];
     const debtorsList = debtors || [];
 
     // Calculate debtors with unpaid invoices
@@ -72,12 +74,9 @@ export default async function DashboardPage() {
             .filter(inv => inv.calculatedStatus !== 'paid')
             .map(inv => inv.debtor_id)
     );
-    const debtorsWithUnpaidInvoices = debtorIdsWithUnpaidInvoices.size;
 
     // Calculate action items - things that need user attention
     const debtorsWithoutEmail = debtorsList.filter(d => !d.email);
-
-    const invoicesWithoutSequence = invoicesList.filter(inv => !(inv as any).sequence_id && inv.calculatedStatus !== 'paid');
     const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
 
     const actionItems: Array<{
@@ -119,106 +118,131 @@ export default async function DashboardPage() {
     const paidInvoices = invoicesList.filter(inv => inv.calculatedStatus === 'paid');
 
     const totalReceivables = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
-    const totalReceivablesNet = unpaidInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
-    const overdueReceivables = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
-    const overdueReceivablesNet = overdueInvoices.reduce((sum, inv) => sum + Number(inv.amount_net || (inv.amount / 1.23)), 0);
+    const totalPayables = costInvoicesList
+        .filter(inv => inv.payment_status !== 'paid')
+        .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
     // Get urgent invoices (overdue or due soon)
     const urgentInvoices = invoicesList
         .filter(inv => inv.calculatedStatus === 'overdue' || inv.calculatedStatus === 'due_soon')
         .slice(0, 5);
 
-    // Fetch scheduled steps for urgent invoices to show sequence progress
-    const urgentInvoiceIds = urgentInvoices.map(inv => inv.id);
-    const { data: scheduledStepsData } = await supabase
-        .from('scheduled_steps')
-        .select(`
-            id,
-            invoice_id,
-            scheduled_for,
-            status,
-            sequence_steps (
-                step_order,
-                sequences (name)
-            )
-        `)
-        .in('invoice_id', urgentInvoiceIds.length > 0 ? urgentInvoiceIds : ['none']);
+    // Prepare data for UpcomingWeek
+    const upcomingSalesInvoices = invoicesList.map(inv => ({
+        id: inv.id,
+        invoice_number: inv.invoice_number,
+        amount: inv.amount,
+        amount_gross: inv.amount_gross,
+        due_date: inv.due_date,
+        clientName: (inv.debtors as any)?.name || 'Nieznany klient',
+    }));
 
-    // Build sequence info map per invoice
-    const sequenceInfoMap = new Map<string, {
-        sequenceName: string;
-        totalSteps: number;
-        completedSteps: number;
-        lastStepDate: string | null;
-        nextStepDate: string | null;
-    }>();
+    const upcomingCostInvoices = costInvoicesList.map(inv => ({
+        id: inv.id,
+        invoice_number: inv.invoice_number,
+        amount: inv.amount,
+        amount_gross: inv.amount_gross,
+        due_date: inv.due_date,
+        clientName: inv.contractor_name,
+    }));
 
-    if (scheduledStepsData) {
-        // Group by invoice_id
-        const stepsByInvoice = scheduledStepsData.reduce((acc, step) => {
-            if (!acc[step.invoice_id]) acc[step.invoice_id] = [];
-            acc[step.invoice_id].push(step);
-            return acc;
-        }, {} as Record<string, typeof scheduledStepsData>);
+    // ADVANCED ANALYTICS: RUNWAY & PROFIT MARGIN
+    const currentBalance = Number(profile?.current_balance || 0);
 
-        for (const [invoiceId, steps] of Object.entries(stepsByInvoice)) {
-            const sortedSteps = steps.sort((a, b) =>
-                new Date(a.scheduled_for).getTime() - new Date(b.scheduled_for).getTime()
-            );
+    // 1. Runway Calculation (Avg Burn Rate last 3 months)
+    const calculateRunway = () => {
+        const today = new Date();
+        const threeMonthsAgo = new Date();
+        threeMonthsAgo.setMonth(today.getMonth() - 3);
+        threeMonthsAgo.setDate(1); // Start of 3 months ago
 
-            const seqStep = steps[0]?.sequence_steps as any;
-            const sequenceName = seqStep?.sequences?.name || 'Sekwencja';
+        const recentCosts = costInvoicesList.filter(cost => {
+            const d = new Date(cost.issue_date);
+            return d >= threeMonthsAgo && d <= today;
+        });
 
-            // Count executed + skipped as completed (processed) steps
-            const completedSteps = sortedSteps.filter(s => s.status === 'executed' || s.status === 'skipped').length;
-            const pendingSteps = sortedSteps.filter(s => s.status === 'pending');
-            const executedSteps = sortedSteps.filter(s => s.status === 'executed');
+        const totalRecentCosts = recentCosts.reduce((sum, cost) => sum + Number(cost.amount_gross || cost.amount), 0);
+        const avgMonthlyBurn = totalRecentCosts / 3;
 
-            const lastExecuted = executedSteps.length > 0 ? executedSteps[executedSteps.length - 1] : null;
-            const nextPending = pendingSteps.length > 0 ? pendingSteps[0] : null;
+        if (avgMonthlyBurn <= 0) return { months: 99, burnRate: 0 }; // Infinite runway if no costs
+        return {
+            months: Math.round((currentBalance / avgMonthlyBurn) * 10) / 10,
+            burnRate: avgMonthlyBurn
+        };
+    };
 
-            sequenceInfoMap.set(invoiceId, {
-                sequenceName,
-                totalSteps: sortedSteps.length,
-                completedSteps,
-                lastStepDate: lastExecuted?.scheduled_for || null,
-                nextStepDate: nextPending?.scheduled_for || null,
+    const runwayData = calculateRunway();
+
+    // 2. Profit Margin Calculation (Current Month)
+    const calculateMargin = () => {
+        const today = new Date();
+        const currentMonth = today.getMonth();
+        const currentYear = today.getFullYear();
+
+        const curMonthSales = invoicesList.filter(inv => {
+            const d = new Date(inv.issue_date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        const curMonthCosts = costInvoicesList.filter(cost => {
+            const d = new Date(cost.issue_date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+
+        const revenue = curMonthSales.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+        const costs = curMonthCosts.reduce((sum, cost) => sum + Number(cost.amount_gross || cost.amount), 0);
+
+        const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
+
+        return { margin: Math.round(margin), revenue, costs };
+    };
+
+    const marginData = calculateMargin();
+
+
+    // CASH FLOW CALCULATION
+    const generateCashFlowData = () => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        let currentBalance = Number(profile?.current_balance || 0);
+        const data = [];
+
+        for (let i = 0; i <= 30; i++) {
+            const date = new Date(today);
+            date.setDate(date.getDate() + i);
+            const dateStr = date.toISOString().split('T')[0];
+
+            // Incoming (Sales due on this date)
+            const dailyIncoming = invoicesList
+                .filter(inv => inv.calculatedStatus !== 'paid' && new Date(inv.due_date).toISOString().startsWith(dateStr))
+                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+
+            // Outgoing (Costs due on this date)
+            const dailyOutgoing = costInvoicesList
+                .filter(inv => inv.payment_status !== 'paid' && new Date(inv.due_date).toISOString().startsWith(dateStr))
+                .reduce((sum, inv) => sum + Number(inv.amount), 0);
+
+            currentBalance = currentBalance + dailyIncoming - dailyOutgoing;
+
+            data.push({
+                date: dateStr,
+                balance: currentBalance,
+                incoming: dailyIncoming,
+                outgoing: dailyOutgoing
             });
         }
-    }
+        return data;
+    };
 
-    const hasData = invoicesList.length > 0 || debtorsList.length > 0;
+    const cashFlowData = generateCashFlowData();
 
-    // Prepare chart data
-    const pendingCount = invoicesList.filter(i => i.calculatedStatus === 'pending' || i.calculatedStatus === 'due_soon').length;
-    const overdueCount = overdueInvoices.length;
-    const partialCount = invoicesList.filter(i => i.calculatedStatus === 'partial').length;
-    const paidCount = paidInvoices.length;
-
-    const statusChartData = [
-        { name: 'Oczekujące', value: pendingCount, color: '#3b82f6' },
-        { name: 'Przeterminowane', value: overdueCount, color: '#ef4444' },
-        { name: 'Częściowe', value: partialCount, color: '#f59e0b' },
-        { name: 'Opłacone', value: paidCount, color: '#22c55e' },
-    ].filter(s => s.value > 0);
-
+    // Chart logic restoration
     // Helper functions for date formatting
-    const formatDayLabel = (date: Date) => {
-        const days = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
-        return days[date.getDay()];
-    };
+    const formatDayLabel = (date: Date) => ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'][date.getDay()];
+    const formatWeekLabel = (date: Date) => `${date.getDate()} ${date.toLocaleString('pl-PL', { month: 'short' })}`;
+    const formatMonthLabel = (date: Date) => date.toLocaleString('pl-PL', { month: 'short' });
 
-    const formatWeekLabel = (date: Date) => {
-        const day = date.getDate();
-        const month = date.toLocaleString('pl-PL', { month: 'short' });
-        return `${day} ${month}`;
-    };
-
-    const formatMonthLabel = (date: Date) => {
-        return date.toLocaleString('pl-PL', { month: 'short' });
-    };
-
-    // Generate DAILY receivables data: Issued, Paid, Pending, Debt (cumulative)
+    // Generate DAILY receivables data
     const generateDailyReceivables = () => {
         const data = [];
         const today = new Date();
@@ -229,34 +253,18 @@ export default async function DashboardPage() {
             const periodEnd = new Date(date);
             periodEnd.setHours(23, 59, 59, 999);
 
-            // Issued = invoices due on this specific day
-            const dayInvoices = invoicesList.filter(inv => {
-                const invDate = new Date(inv.due_date).toISOString().split('T')[0];
-                return invDate === dayStr;
-            });
+            const dayInvoices = invoicesList.filter(inv => new Date(inv.due_date).toISOString().startsWith(dayStr));
             const issued = dayInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Paid = paid invoices due on this specific day
-            const paid = dayInvoices
-                .filter(inv => inv.calculatedStatus === 'paid')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Pending = invoices that are pending (not paid, not overdue) due on this day
-            const pending = dayInvoices
-                .filter(inv => inv.calculatedStatus === 'pending')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Debt (cumulative) = all overdue invoices up to this day
-            const debt = invoicesList
-                .filter(inv => new Date(inv.due_date) <= periodEnd && inv.calculatedStatus === 'overdue')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            const paid = dayInvoices.filter(inv => inv.calculatedStatus === 'paid').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const pending = dayInvoices.filter(inv => inv.calculatedStatus === 'pending').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const debt = invoicesList.filter(inv => new Date(inv.due_date) <= periodEnd && inv.calculatedStatus === 'overdue').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
 
             data.push({ day: formatDayLabel(date), issued, paid, pending, debt });
         }
         return data;
     };
 
-    // Generate WEEKLY receivables data: Issued, Paid, Pending, Debt (cumulative)
+    // Generate WEEKLY receivables data
     const generateWeeklyReceivables = () => {
         const data = [];
         const today = new Date();
@@ -267,34 +275,21 @@ export default async function DashboardPage() {
             weekEnd.setDate(weekEnd.getDate() + 6);
             weekEnd.setHours(23, 59, 59, 999);
 
-            // Issued = invoices due in this specific week
             const weekInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= weekStart && invDate <= weekEnd;
             });
             const issued = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Paid = paid invoices due in this specific week
-            const paid = weekInvoices
-                .filter(inv => inv.calculatedStatus === 'paid')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Pending = invoices that are pending (not paid, not overdue) due in this week
-            const pending = weekInvoices
-                .filter(inv => inv.calculatedStatus === 'pending')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Debt (cumulative) = all overdue invoices up to end of this week
-            const debt = invoicesList
-                .filter(inv => new Date(inv.due_date) <= weekEnd && inv.calculatedStatus === 'overdue')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            const paid = weekInvoices.filter(inv => inv.calculatedStatus === 'paid').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const pending = weekInvoices.filter(inv => inv.calculatedStatus === 'pending').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const debt = invoicesList.filter(inv => new Date(inv.due_date) <= weekEnd && inv.calculatedStatus === 'overdue').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
 
             data.push({ week: formatWeekLabel(weekStart), issued, paid, pending, debt });
         }
         return data;
     };
 
-    // Generate MONTHLY receivables data: Issued, Paid, Pending, Debt (cumulative)
+    // Generate MONTHLY receivables data
     const generateMonthlyReceivables = () => {
         const data = [];
         const today = new Date();
@@ -303,92 +298,53 @@ export default async function DashboardPage() {
             const monthEnd = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
             monthEnd.setHours(23, 59, 59, 999);
 
-            // Issued = invoices due in this specific month
             const monthInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= monthDate && invDate <= monthEnd;
             });
             const issued = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Paid = paid invoices due in this specific month
-            const paid = monthInvoices
-                .filter(inv => inv.calculatedStatus === 'paid')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Pending = invoices that are pending (not paid, not overdue) due in this month
-            const pending = monthInvoices
-                .filter(inv => inv.calculatedStatus === 'pending')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Debt (cumulative) = all overdue invoices up to end of this month
-            const debt = invoicesList
-                .filter(inv => new Date(inv.due_date) <= monthEnd && inv.calculatedStatus === 'overdue')
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
+            const paid = monthInvoices.filter(inv => inv.calculatedStatus === 'paid').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const pending = monthInvoices.filter(inv => inv.calculatedStatus === 'pending').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
+            const debt = invoicesList.filter(inv => new Date(inv.due_date) <= monthEnd && inv.calculatedStatus === 'overdue').reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount) - Number(inv.amount_paid || 0), 0);
 
             data.push({ month: formatMonthLabel(monthDate), issued, paid, pending, debt });
         }
         return data;
     };
 
+    // Generate Cost Trend Data (Dashboard Version)
+    const generateCostTrendData = () => {
+        const data: Map<string, { date: string, gross: number, paid: number }> = new Map();
+
+        // Populate last 6 months
+        const today = new Date();
+        for (let i = -5; i <= 0; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            const key = formatMonthLabel(d);
+            data.set(key, { date: key, gross: 0, paid: 0 });
+        }
+
+        costInvoicesList.forEach(cost => {
+            const d = new Date(cost.issue_date);
+            const key = formatMonthLabel(d);
+            if (data.has(key)) {
+                const entry = data.get(key)!;
+                entry.gross += Number(cost.amount_gross || cost.amount);
+                if (cost.payment_status === 'paid') {
+                    entry.paid += Number(cost.amount_gross || cost.amount);
+                }
+            }
+        });
+
+        return Array.from(data.values());
+    };
+
     const dailyReceivablesData = generateDailyReceivables();
     const weeklyReceivablesData = generateWeeklyReceivables();
     const monthlyReceivablesData = generateMonthlyReceivables();
+    const costTrendData = generateCostTrendData();
 
-    // Activity chart data - prepare for all periods
-    const allSentActions = sentActions || [];
-
-    // DAILY activity (by hour for today)
-    const dailyActivityData = Array.from({ length: 24 }, (_, hour) => ({
-        hour: `${hour}:00`,
-        emails: allSentActions.filter(a => {
-            const d = new Date(a.sent_at || a.created_at);
-            const today = new Date();
-            return d.getHours() === hour &&
-                d.toDateString() === today.toDateString() &&
-                a.action_type === 'email';
-        }).length,
-    })).filter((_, i) => i >= 8 && i <= 18); // Show only business hours
-
-    // WEEKLY activity (by day of week)
-    const dayNames = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
-    const activityByDay: Record<string, { emails: number }> = {};
-    dayNames.forEach(day => { activityByDay[day] = { emails: 0 }; });
-
-    allSentActions.forEach(action => {
-        const date = new Date(action.sent_at || action.created_at);
-        const dayName = dayNames[date.getDay()];
-        if (action.action_type === 'email') {
-            activityByDay[dayName].emails++;
-        }
-    });
-
-    const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({
-        day,
-        emails: activityByDay[day].emails,
-    }));
-
-    // MONTHLY activity (by week)
-    const monthlyActivityData = (() => {
-        const data = [];
-        const today = new Date();
-        for (let i = 3; i >= 0; i--) {
-            const weekStart = new Date(today);
-            weekStart.setDate(weekStart.getDate() - (i * 7));
-            const weekEnd = new Date(weekStart);
-            weekEnd.setDate(weekEnd.getDate() + 6);
-
-            const weekActions = allSentActions.filter(a => {
-                const d = new Date(a.sent_at || a.created_at);
-                return d >= weekStart && d <= weekEnd;
-            });
-
-            data.push({
-                week: `Tydz. ${4 - i}`,
-                emails: weekActions.filter(a => a.action_type === 'email').length,
-            });
-        }
-        return data;
-    })();
+    const hasData = invoicesList.length > 0 || debtorsList.length > 0;
 
     return (
         <div className="space-y-8">
@@ -399,14 +355,14 @@ export default async function DashboardPage() {
                         Witaj{profile?.full_name ? `, ${profile.full_name.split(' ')[0]}` : ''}! 👋
                     </h1>
                     <p className="text-muted-foreground mt-1">
-                        Oto podsumowanie Twoich należności
+                        Twoje centrum dowodzenia finansami
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Link href="/history">
-                        <Button variant="outline">
-                            <History className="h-4 w-4 mr-2" />
-                            Historia
+                    <Link href="/costs/new">
+                        <Button variant="outline" className="border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30">
+                            <TrendingDown className="h-4 w-4 mr-2 text-red-500" />
+                            Dodaj koszt
                         </Button>
                     </Link>
                     <Link href="/invoices/new">
@@ -418,80 +374,111 @@ export default async function DashboardPage() {
                 </div>
             </div>
 
-            {/* Empty state for new users */}
-            {!hasData && (
-                <Card className="py-12 bg-gradient-to-br from-primary/5 to-primary/10">
-                    <CardContent className="text-center">
-                        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Sparkles className="h-10 w-10 text-primary" />
-                        </div>
-                        <h2 className="text-2xl font-bold mb-2">Witaj w FluintyDebt!</h2>
-                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                            Zacznij od dodania kontrahentów i faktur, a system automatycznie pomoże Ci odzyskać należności.
-                        </p>
-                        <div className="flex flex-wrap justify-center gap-4">
-                            <Link href="/debtors/new">
-                                <Button variant="outline">
-                                    <Users className="h-4 w-4 mr-2" />
-                                    Dodaj kontrahenta
-                                </Button>
-                            </Link>
-                            <Link href="/invoices/new">
-                                <Button>
-                                    <FileText className="h-4 w-4 mr-2" />
-                                    Dodaj fakturę
-                                </Button>
-                            </Link>
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-
-            {/* KPI Cards */}
             {hasData && (
                 <>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Card>
+                    {/* Financial Summary & Balance Widget */}
+                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                        {/* KPI Cards */}
+                        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card>
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do odzyskania</CardTitle>
+                                    <TrendingUp className="h-4 w-4 text-emerald-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceivables)}</div>
+                                    <p className="text-xs text-muted-foreground mt-1">{unpaidInvoices.length} faktur sprzedaży</p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="relative overflow-hidden">
+                                {!(profile?.modules as any)?.costs && (
+                                    <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                        <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                            <Lock className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                    </div>
+                                )}
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do zapłaty</CardTitle>
+                                    <TrendingDown className="h-4 w-4 text-red-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalPayables)}</div>
+                                    <p className="text-xs text-muted-foreground mt-1">{costInvoicesList.filter(c => c.payment_status !== 'paid').length} faktur kosztowych</p>
+                                </CardContent>
+                            </Card>
+
+                            <Card className="relative overflow-hidden">
+                                {!(profile?.modules as any)?.costs && (
+                                    <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                        <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                            <Lock className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                    </div>
+                                )}
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-sm font-medium text-muted-foreground">Bilans (Netto)</CardTitle>
+                                    <Clock className="h-4 w-4 text-blue-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className={`text-2xl font-bold ${totalReceivables - totalPayables >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                                        {formatCurrency(totalReceivables - totalPayables)}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">Należności - Zobowiązania</p>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        {/* Bank Account Widget */}
+                        <div className="lg:col-span-1">
+                            <BankAccountWidget
+                                initialBalance={Number(profile?.current_balance || 0)}
+                                isLocked={!(profile?.modules as any)?.costs}
+                            />
+                        </div>
+                    </div>
+
+                    {/* NEW SECTION: STRATEGIC HEALTH METRICS */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Card className="border-l-4 border-l-purple-500">
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">
-                                    Do odzyskania
-                                </CardTitle>
-                                <Clock className="h-4 w-4 text-muted-foreground" />
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Runway (Przeżywalność)</CardTitle>
+                                <TrendingUp className="h-4 w-4 text-purple-500" />
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold">{formatCurrency(totalReceivables)}</div>
-                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(totalReceivablesNet)}</p>
-                                <p className="text-xs text-muted-foreground">{unpaidInvoices.length} nieopłaconych faktur</p>
+                                <div className="text-2xl font-bold">
+                                    {runwayData.months >= 99 ? '> 12 mies.' : `${runwayData.months} mies.`}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Przy śr. kosztach {formatCurrency(runwayData.burnRate)}/mies.
+                                </p>
                             </CardContent>
                         </Card>
-                        <Card>
+
+                        <Card className={`border-l-4 ${marginData.margin >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">
-                                    Przeterminowane
-                                </CardTitle>
-                                <AlertTriangle className="h-4 w-4 text-red-500" />
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Marża (Ten m-c)</CardTitle>
+                                {marginData.margin >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
                             </CardHeader>
                             <CardContent>
-                                <div className="text-2xl font-bold text-red-600">{formatCurrency(overdueReceivables)}</div>
-                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(overdueReceivablesNet)}</p>
-                                <p className="text-xs text-muted-foreground">{overdueInvoices.length} przeterminowanych</p>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">
-                                    Dłużnicy
-                                </CardTitle>
-                                <Users className="h-4 w-4 text-muted-foreground" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">{debtorsWithUnpaidInvoices}</div>
-                                <p className="text-xs text-muted-foreground">z nieopłaconymi fakturami</p>
+                                <div className={`text-2xl font-bold ${marginData.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {marginData.margin}%
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Przychód: {formatCurrency(marginData.revenue)}
+                                </p>
                             </CardContent>
                         </Card>
                     </div>
 
-                    {/* Action items - things that need attention */}
+                    {/* Cash Flow Forecast */}
+                    <CashFlowChart
+                        data={cashFlowData}
+                        isLocked={!(profile?.modules as any)?.costs}
+                    />
+
+                    {/* Action items */}
                     {actionItems.length > 0 && (
                         <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
                             <CardHeader className="pb-3">
@@ -520,147 +507,80 @@ export default async function DashboardPage() {
                                         </Link>
                                     ))}
                                 </div>
-                                {(debtorsWithoutEmail.length > 3) && (
-                                    <div className="mt-3 text-center">
-                                        <Link href="/debtors">
-                                            <Button variant="ghost" size="sm">
-                                                Zobacz wszystkich kontrahentów
-                                                <ArrowRight className="h-4 w-4 ml-2" />
-                                            </Button>
-                                        </Link>
-                                    </div>
-                                )}
                             </CardContent>
                         </Card>
                     )}
 
-                    {/* Urgent invoices */}
-                    {urgentInvoices.length > 0 && (
-                        <Card>
-                            <CardHeader className="flex flex-row items-center justify-between">
-                                <div>
-                                    <CardTitle>Pilne faktury</CardTitle>
-                                    <CardDescription>Wymagają uwagi</CardDescription>
-                                </div>
-                                <Link href="/invoices">
-                                    <Button variant="ghost" size="sm">
-                                        Zobacz wszystkie
-                                        <ArrowRight className="h-4 w-4 ml-2" />
-                                    </Button>
-                                </Link>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-3">
-                                    {urgentInvoices.map((invoice) => {
-                                        const seqInfo = sequenceInfoMap.get(invoice.id);
-
-                                        return (
-                                            <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
-                                                <div className="flex items-start justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <p className="font-medium">{invoice.invoice_number}</p>
-                                                            {seqInfo && (
-                                                                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded">
-                                                                    {seqInfo.sequenceName}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-sm text-muted-foreground">
-                                                            {(invoice.debtors as any)?.name || 'Nieznany'} • {formatDate(invoice.due_date)}
-                                                        </p>
-                                                        {invoice.daysOverdue > 0 && (
-                                                            <p className="text-xs text-red-600">
-                                                                {invoice.daysOverdue} dni po terminie
-                                                            </p>
-                                                        )}
-                                                        {seqInfo && (
-                                                            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                                                                <span className="font-medium text-foreground">
-                                                                    Krok {seqInfo.completedSteps}/{seqInfo.totalSteps}
-                                                                </span>
-                                                                {seqInfo.lastStepDate && (
-                                                                    <span>Ostatni: {formatDate(seqInfo.lastStepDate)}</span>
-                                                                )}
-                                                                {seqInfo.nextStepDate && (
-                                                                    <span className="text-primary">Następny: {formatDate(seqInfo.nextStepDate)}</span>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <div className="text-right flex items-center gap-4">
-                                                        <div>
-                                                            <p className="font-semibold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
-                                                            {invoice.amount_net && (
-                                                                <p className="text-xs text-muted-foreground">netto: {formatCurrency(invoice.amount_net)}</p>
-                                                            )}
-                                                        </div>
-                                                        <StatusBadge status={invoice.calculatedStatus} />
-                                                    </div>
-                                                </div>
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Quick actions */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <Link href="/invoices/new">
-                            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-                                <CardContent className="pt-6 text-center">
-                                    <FileText className="h-8 w-8 mx-auto mb-2 text-primary" />
-                                    <p className="font-medium">Dodaj fakturę</p>
-                                    <p className="text-sm text-muted-foreground">Wprowadź nową należność</p>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                        <Link href="/ai-generator">
-                            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-                                <CardContent className="pt-6 text-center">
-                                    <Sparkles className="h-8 w-8 mx-auto mb-2 text-primary" />
-                                    <p className="font-medium">Generator AI</p>
-                                    <p className="text-sm text-muted-foreground">Wygeneruj wezwanie</p>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                        <Link href="/reports">
-                            <Card className="hover:border-primary/50 transition-colors cursor-pointer h-full">
-                                <CardContent className="pt-6 text-center">
-                                    <TrendingUp className="h-8 w-8 mx-auto mb-2 text-primary" />
-                                    <p className="font-medium">Raporty</p>
-                                    <p className="text-sm text-muted-foreground">Analiza skuteczności</p>
-                                </CardContent>
-                            </Card>
-                        </Link>
-                    </div>
-
-                    {/* Charts */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Charts Grid: Receivables & Cost Trend */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <ReceivablesChart
                             data={monthlyReceivablesData}
                             dailyData={dailyReceivablesData}
                             weeklyData={weeklyReceivablesData}
                         />
-                        <StatusPieChart data={statusChartData} />
+                        {/* Cost Trend (reused from Reports) */}
+                        <CostTrendChart
+                            data={costTrendData}
+                        />
                     </div>
 
+                    {/* Urgent Invoices & Upcoming Week */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <ActivityChart
-                            data={weeklyActivityData}
-                            dailyData={dailyActivityData}
-                            monthlyData={monthlyActivityData}
+                        {/* Urgent Invoices */}
+                        <Card className="h-full">
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-lg">Pilne faktury</CardTitle>
+                                <Link href="/invoices">
+                                    <Button variant="ghost" size="sm">Wszystkie <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                                </Link>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {urgentInvoices.length > 0 ? (
+                                    urgentInvoices.map((invoice) => (
+                                        <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
+                                            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                                                <div>
+                                                    <p className="font-medium">{invoice.invoice_number}</p>
+                                                    <p className="text-sm text-muted-foreground">{(invoice.debtors as any)?.name}</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                                    <StatusBadge status={invoice.calculatedStatus} />
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))
+                                ) : (
+                                    <p className="text-sm text-muted-foreground text-center py-4">Brak pilnych faktur</p>
+                                )}
+                            </CardContent>
+                        </Card>
+
+                        {/* Upcoming Week */}
+                        <UpcomingWeek
+                            salesInvoices={upcomingSalesInvoices}
+                            costInvoices={upcomingCostInvoices}
                         />
-                        <CashFlowPrediction predictions={[
-                            { period: 'Ten tydzień', expected: Math.round(totalReceivables * 0.2), probability: 75 },
-                            { period: 'Przyszły tydzień', expected: Math.round(totalReceivables * 0.15), probability: 60 },
-                            { period: 'Za 2 tygodnie', expected: Math.round(totalReceivables * 0.1), probability: 45 },
-                            { period: 'Za miesiąc', expected: Math.round(totalReceivables * 0.3), probability: 30 },
-                        ].filter(p => p.expected > 0)} />
                     </div>
                 </>
+            )}
+
+            {!hasData && (
+                <Card className="py-12 bg-gradient-to-br from-primary/5 to-primary/10">
+                    <CardContent className="text-center">
+                        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                            <Sparkles className="h-10 w-10 text-primary" />
+                        </div>
+                        <h2 className="text-2xl font-bold mb-2">Witaj w VindycAItion!</h2>
+                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                            Zacznij od dodania faktur, aby zobaczyć analizy.
+                        </p>
+                        <div className="flex justify-center gap-4">
+                            <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>
+                            <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>
+                        </div>
+                    </CardContent>
+                </Card>
             )}
         </div>
     );

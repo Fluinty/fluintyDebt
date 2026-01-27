@@ -14,6 +14,8 @@ import {
     Calendar,
     BarChart3,
     History,
+    Lock,
+    Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -35,61 +37,70 @@ interface SidebarProps {
     profile: Profile | null;
 }
 
-const navigation = [
+type NavItem = {
+    name: string;
+    href: string;
+    icon: any;
+    children?: { name: string; href: string }[];
+};
+
+type NavGroup = {
+    title: string;
+    module?: 'sales' | 'costs';
+    items: NavItem[];
+};
+
+const navigation: NavGroup[] = [
     {
-        name: 'Dashboard',
-        href: '/dashboard',
-        icon: LayoutDashboard,
-    },
-    {
-        name: 'Należności',
-        href: '/invoices',
-        icon: FileText,
-        children: [
-            { name: 'Wszystkie', href: '/invoices' },
-            { name: 'Import', href: '/invoices/import' },
+        title: "",
+        items: [
+            { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         ],
     },
     {
-        name: 'Kontrahenci',
-        href: '/debtors',
-        icon: Users,
+        title: "SPRZEDAŻ",
+        module: "sales",
+        items: [
+            {
+                name: 'Należności',
+                href: '/invoices',
+                icon: FileText,
+                children: [
+                    { name: 'Wszystkie', href: '/invoices' },
+                    { name: 'Import', href: '/invoices/import' },
+                ],
+            },
+            { name: 'Kontrahenci', href: '/debtors', icon: Users },
+            { name: 'Raporty', href: '/invoices/reports', icon: BarChart3 },
+            { name: 'Sekwencje', href: '/sequences', icon: GitBranch },
+            { name: 'Harmonogram', href: '/scheduler', icon: Calendar },
+        ],
     },
     {
-        name: 'Sekwencje',
-        href: '/sequences',
-        icon: GitBranch,
+        title: "WYDATKI",
+        module: "costs",
+        items: [
+            { name: 'Zobowiązania', href: '/costs', icon: Receipt },
+            { name: 'Dostawcy', href: '/vendors', icon: Users },
+            { name: 'Raporty', href: '/costs/reports', icon: BarChart3 },
+        ],
     },
     {
-        name: 'Harmonogram',
-        href: '/scheduler',
-        icon: Calendar,
-    },
-    {
-        name: 'Generator AI',
-        href: '/ai-generator',
-        icon: Sparkles,
-    },
-    {
-        name: 'Raporty',
-        href: '/reports',
-        icon: BarChart3,
-    },
-    {
-        name: 'Historia',
-        href: '/history',
-        icon: History,
-    },
-    {
-        name: 'Ustawienia',
-        href: '/settings',
-        icon: Settings,
+        title: "NARZĘDZIA",
+        items: [
+            { name: 'Generator AI', href: '/ai-generator', icon: Sparkles },
+            { name: 'Historia', href: '/history', icon: History },
+            { name: 'Ustawienia', href: '/settings', icon: Settings },
+        ],
     },
 ];
 
 export function Sidebar({ user, profile }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
+
+    // Default to sales=true if modules not set (legacy)
+    const userModules = profile?.modules || { sales: true, costs: false };
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -114,7 +125,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
         <aside className="hidden lg:fixed lg:inset-y-0 lg:flex lg:w-64 lg:flex-col">
             <div className="flex flex-col flex-grow bg-card border-r overflow-y-auto">
                 {/* Logo */}
-                <div className="flex items-center h-16 px-6 border-b">
+                <div className="flex items-center h-16 px-6 border-b shrink-0">
                     <Link href="/dashboard" className="flex items-center gap-2">
                         <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
                             <span className="text-primary-foreground font-bold text-sm">V</span>
@@ -124,65 +135,90 @@ export function Sidebar({ user, profile }: SidebarProps) {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 px-4 py-4 space-y-1">
-                    {navigation.map((item) => {
-                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-
-                        if (item.children) {
-                            return (
-                                <div key={item.name}>
-                                    <Link
-                                        href={item.href}
-                                        className={cn(
-                                            'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                                            isActive
-                                                ? 'bg-primary/10 text-primary'
-                                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                                        )}
-                                    >
-                                        <item.icon className="h-5 w-5" />
-                                        {item.name}
-                                    </Link>
-                                    <div className="ml-8 mt-1 space-y-1">
-                                        {item.children.map((child) => (
-                                            <Link
-                                                key={child.href}
-                                                href={child.href}
-                                                className={cn(
-                                                    'block px-3 py-1.5 text-sm rounded-md transition-colors',
-                                                    pathname === child.href
-                                                        ? 'text-primary font-medium'
-                                                        : 'text-muted-foreground hover:text-foreground'
-                                                )}
-                                            >
-                                                {child.name}
-                                            </Link>
-                                        ))}
-                                    </div>
-                                </div>
-                            );
-                        }
+                <nav className="flex-1 px-4 py-4 space-y-6">
+                    {navigation.map((group, groupIndex) => {
+                        // Check if group is locked
+                        const isLocked = group.module ? !userModules[group.module] : false;
 
                         return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className={cn(
-                                    'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
-                                    isActive
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                            <div key={groupIndex}>
+                                {group.title && (
+                                    <div className="flex items-center justify-between px-3 mb-2">
+                                        <h3 className="text-xs font-semibold text-muted-foreground tracking-wider uppercase">
+                                            {group.title}
+                                        </h3>
+                                        {isLocked && <Lock className="h-3 w-3 text-muted-foreground" />}
+                                    </div>
                                 )}
-                            >
-                                <item.icon className="h-5 w-5" />
-                                {item.name}
-                            </Link>
+
+                                <div className="space-y-1">
+                                    {group.items.map((item) => {
+                                        const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+
+                                        // If locked, link to upsell page, otherwise normal href
+                                        const href = isLocked ? `/upsell?module=${group.module}` : item.href;
+
+                                        if (item.children && !isLocked) {
+                                            return (
+                                                <div key={item.name}>
+                                                    <Link
+                                                        href={href}
+                                                        className={cn(
+                                                            'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                                                            isActive
+                                                                ? 'bg-primary/10 text-primary'
+                                                                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                                                        )}
+                                                    >
+                                                        <item.icon className="h-4 w-4" />
+                                                        {item.name}
+                                                    </Link>
+                                                    <div className="ml-8 mt-1 space-y-1">
+                                                        {item.children.map((child) => (
+                                                            <Link
+                                                                key={child.href}
+                                                                href={child.href}
+                                                                className={cn(
+                                                                    'block px-3 py-1.5 text-sm rounded-md transition-colors',
+                                                                    pathname === child.href
+                                                                        ? 'text-primary font-medium'
+                                                                        : 'text-muted-foreground hover:text-foreground'
+                                                                )}
+                                                            >
+                                                                {child.name}
+                                                            </Link>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+
+                                        return (
+                                            <Link
+                                                key={item.name}
+                                                href={href}
+                                                className={cn(
+                                                    'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                                                    isActive
+                                                        ? 'bg-primary/10 text-primary'
+                                                        : 'text-muted-foreground hover:bg-accent hover:text-foreground',
+                                                    isLocked && 'opacity-60 cursor-not-allowed hover:bg-transparent'
+                                                )}
+                                            >
+                                                <item.icon className="h-4 w-4" />
+                                                <span>{item.name}</span>
+                                                {isLocked && <Lock className="h-3 w-3 ml-auto opacity-50" />}
+                                            </Link>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         );
                     })}
                 </nav>
 
                 {/* User Menu */}
-                <div className="border-t p-4">
+                <div className="border-t p-4 shrink-0">
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <Button variant="ghost" className="w-full justify-start gap-3 h-auto py-2">
@@ -191,7 +227,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
                                         {getInitials(profile?.full_name, user.email || '')}
                                     </AvatarFallback>
                                 </Avatar>
-                                <div className="flex-1 text-left">
+                                <div className="flex-1 text-left min-w-0">
                                     <p className="text-sm font-medium truncate">
                                         {profile?.full_name || user.email}
                                     </p>

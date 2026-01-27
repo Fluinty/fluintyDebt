@@ -78,7 +78,42 @@ export default async function HistoryPage() {
         });
     }
 
-    // 3. Get scheduled steps (to show what's planned)
+    // 3. Get recent cost invoices
+    const { data: recentCosts } = await supabase
+        .from('cost_invoices')
+        .select('id, invoice_number, amount, contractor_name, created_at, payment_status, paid_at')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+    if (recentCosts) {
+        recentCosts.forEach(cost => {
+            // Cost invoice created event
+            events.push({
+                id: `cost-created-${cost.id}`,
+                type: 'cost_created',
+                title: 'Nowy wydatek',
+                description: `Faktura ${cost.invoice_number} od ${cost.contractor_name} na kwotę ${formatCurrency(cost.amount)}`,
+                date: cost.created_at,
+                link: '/costs',
+                status: 'success',
+            });
+
+            // Cost invoice paid event
+            if (cost.payment_status === 'paid' && cost.paid_at) {
+                events.push({
+                    id: `cost-paid-${cost.id}`,
+                    type: 'cost_paid',
+                    title: 'Wydatek opłacony',
+                    description: `Opłacono fakturę ${cost.invoice_number} od ${cost.contractor_name}`,
+                    date: cost.paid_at,
+                    link: '/costs',
+                    status: 'success',
+                });
+            }
+        });
+    }
+
+    // 4. Get scheduled steps (only executed ones)
     const { data: scheduledSteps } = await supabase
         .from('scheduled_steps')
         .select(`
@@ -86,6 +121,7 @@ export default async function HistoryPage() {
             scheduled_for,
             created_at,
             status,
+            executed_at,
             invoices(invoice_number, debtors(name)),
             sequence_steps(channel, email_subject)
         `)
@@ -94,24 +130,22 @@ export default async function HistoryPage() {
 
     if (scheduledSteps) {
         scheduledSteps.forEach(step => {
+            // Filter out pending/cancelled - only show history
+            if (step.status !== 'sent' && step.status !== 'executed' && step.status !== 'failed') {
+                return;
+            }
+
             const invoice = step.invoices as any;
             const seqStep = step.sequence_steps as any;
             const channel = 'Email';
 
-            let status: 'success' | 'pending' | 'failed' = 'pending';
-            let title = 'Zaplanowane przypomnienie';
-            let eventType = 'step_scheduled';
+            let status: 'success' | 'pending' | 'failed' = 'success';
+            let title = `${channel} wysłany`;
+            let eventType = 'step_executed';
 
-            if (step.status === 'sent' || step.status === 'executed') {
-                status = 'success';
-                title = `${channel} wysłany`;
-                eventType = 'step_executed';
-            } else if (step.status === 'failed') {
+            if (step.status === 'failed') {
                 status = 'failed';
                 title = `${channel} - błąd`;
-                eventType = 'step_executed';
-            } else if (step.status === 'cancelled') {
-                return; // Skip cancelled steps
             }
 
             events.push({
@@ -119,7 +153,7 @@ export default async function HistoryPage() {
                 type: eventType,
                 title,
                 description: `${invoice?.invoice_number || 'Faktura'} → ${invoice?.debtors?.name || 'kontrahent'}`,
-                date: step.scheduled_for,
+                date: step.executed_at || step.scheduled_for, // Use executed_at if available
                 createdAt: step.created_at,
                 link: '/scheduler',
                 status,

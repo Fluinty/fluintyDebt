@@ -5,6 +5,7 @@ import { createKSeFClient } from '@/lib/ksef/client';
 import { generateScheduledSteps } from '@/lib/sequences/generate-schedule';
 import { lookupCompanyByNip } from '@/lib/gus/gus-client';
 import { parseKSeFXml } from '@/lib/ksef/xml-parser'; // Import parser
+import { syncKSeFCostInvoices } from '@/app/actions/ksef-costs-actions'; // Import cost sync
 import type { KSeFEnvironment, KSeFSettingsFormData, UserKSeFSettings } from '@/lib/ksef/types';
 
 /**
@@ -663,7 +664,7 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
                 try {
                     const xmlContent = await client.getInvoiceXml(ksefNumber);
                     if (xmlContent) {
-                        const items = parseKSeFXml(xmlContent);
+                        const { items } = parseKSeFXml(xmlContent);
                         if (items.length > 0) {
                             console.log(`[Sync] Found ${items.length} items for invoice ${ksefNumber}`);
                             const itemsToInsert = items.map(item => ({
@@ -719,15 +720,37 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
             },
         });
 
+        // Sync Cost Invoices (Purchase invoices)
+        // We do this AFTER sales invoices, but in the same "Sync" action from UI perspective
+        let costInvoicesImported = 0;
+        let costInvoicesError = '';
+
+        try {
+            console.log('[Sync] Starting Cost Invoices sync...');
+            const costResult = await syncKSeFCostInvoices(daysBack, maxInvoices);
+            if (costResult.success) {
+                costInvoicesImported = costResult.invoicesImported || 0;
+                console.log('[Sync] Cost Invoices synced:', costInvoicesImported);
+            } else {
+                console.error('[Sync] Cost Invoices sync failed:', costResult.error);
+                costInvoicesError = costResult.error || 'Unknown cost sync error';
+            }
+        } catch (costErr) {
+            console.error('[Sync] Cost Invoices sync exception:', costErr);
+            costInvoicesError = 'Exception during cost sync';
+        }
+
+        const totalImported = invoicesImported + costInvoicesImported;
+
         return {
-            success: !hitRateLimit || invoicesImported > 0,
-            invoicesFound,
-            invoicesImported,
-            error: hitRateLimit && invoicesImported === 0
+            success: (!hitRateLimit || invoicesImported > 0) || costInvoicesImported > 0,
+            invoicesFound, // technically only sales found count here
+            invoicesImported: totalImported, // Combined count
+            error: hitRateLimit && invoicesImported === 0 && costInvoicesImported === 0
                 ? 'Przekroczono limit zapytań do KSeF (max 20/godz.). Spróbuj ponownie za ok. godzinę.'
-                : undefined,
+                : (costInvoicesError ? `Sprzedaż OK, ale błąd kosztów: ${costInvoicesError}` : undefined),
             warning: hitRateLimit && invoicesImported > 0
-                ? `Osiągnięto limit zapytań KSeF. Zaimportowano ${invoicesImported} faktur. Pozostałe będą dostępne za ok. godzinę.`
+                ? `Osiągnięto limit zapytań KSeF. Zaimportowano ${invoicesImported} faktur sprzedaży. Pozostałe będą dostępne za ok. godzinę.`
                 : undefined,
         };
     } catch (err) {

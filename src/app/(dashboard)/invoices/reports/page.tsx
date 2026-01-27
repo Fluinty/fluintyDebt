@@ -1,4 +1,4 @@
-import { Download, FileText, TrendingUp, Users, BarChart3 } from 'lucide-react';
+import { Download, FileText, TrendingUp, Users, BarChart3, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -13,14 +13,16 @@ import { formatCurrency } from '@/lib/utils/format-currency';
 import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, calculateDebtorStats } from '@/lib/utils/invoice-calculations';
 import { ReceivablesChart, StatusPieChart, ActivityChart } from '@/components/dashboard/charts';
+import { DSOChart } from '@/components/analytics/dso-chart';
+import { RevenueConcentrationChart } from '@/components/analytics/revenue-concentration';
 
-export default async function ReportsPage() {
+export default async function SalesReportsPage() {
     const supabase = await createClient();
 
     // Fetch invoices for calculations
     const { data: invoices } = await supabase
         .from('invoices')
-        .select('amount, amount_paid, status, due_date');
+        .select('amount, amount_paid, status, due_date, issue_date, paid_at, debtor_id, debtors(name)');
 
     // Fetch debtors with their invoices for stats
     const { data: debtors } = await supabase
@@ -33,7 +35,8 @@ export default async function ReportsPage() {
 
     const { data: actions } = await supabase
         .from('collection_actions')
-        .select('action_type, status');
+        .select('action_type, status, created_at, sent_at')
+        .order('created_at', { ascending: false });
 
     const invoicesList = (invoices || []).map(inv => ({
         ...inv,
@@ -74,7 +77,7 @@ export default async function ReportsPage() {
         .sort((a, b) => b.totalDebt - a.totalDebt)
         .slice(0, 5);
 
-    const hasData = invoicesList.length > 0;
+    const hasInvoicesData = invoicesList.length > 0;
 
     // Prepare chart data for reports
     const pendingCount = invoicesList.filter(i => i.calculatedStatus === 'pending' || i.calculatedStatus === 'due_soon').length;
@@ -143,7 +146,7 @@ export default async function ReportsPage() {
         return data;
     };
 
-    // Generate WEEKLY data: Issued, Paid, Pending, Debt (cumulative)
+    // Generate WEEKLY data
     const generateWeeklyData = () => {
         const data = [];
         const today = new Date();
@@ -154,24 +157,20 @@ export default async function ReportsPage() {
             weekEnd.setDate(weekEnd.getDate() + 6);
             weekEnd.setHours(23, 59, 59, 999);
 
-            // Issued = invoices due in this specific week
             const weekInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= weekStart && invDate <= weekEnd;
             });
             const issued = weekInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Paid = paid invoices due in this specific week
             const paid = weekInvoices
                 .filter(inv => inv.calculatedStatus === 'paid')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Pending = invoices that are pending (not paid, not overdue) due in this week
             const pending = weekInvoices
                 .filter(inv => inv.calculatedStatus === 'pending')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Debt (cumulative) = all overdue invoices up to end of this week
             const debt = invoicesList
                 .filter(inv => new Date(inv.due_date) <= weekEnd && inv.calculatedStatus === 'overdue')
                 .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
@@ -181,7 +180,7 @@ export default async function ReportsPage() {
         return data;
     };
 
-    // Generate MONTHLY data: Issued, Paid, Pending, Debt (cumulative)
+    // Generate MONTHLY data
     const generateMonthlyData = () => {
         const data = [];
         const today = new Date();
@@ -190,24 +189,20 @@ export default async function ReportsPage() {
             const monthEnd = new Date(today.getFullYear(), today.getMonth() + i + 1, 0);
             monthEnd.setHours(23, 59, 59, 999);
 
-            // Issued = invoices due in this specific month
             const monthInvoices = invoicesList.filter(inv => {
                 const invDate = new Date(inv.due_date);
                 return invDate >= monthDate && invDate <= monthEnd;
             });
             const issued = monthInvoices.reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Paid = paid invoices due in this specific month
             const paid = monthInvoices
                 .filter(inv => inv.calculatedStatus === 'paid')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Pending = invoices that are pending (not paid, not overdue) due in this month
             const pending = monthInvoices
                 .filter(inv => inv.calculatedStatus === 'pending')
                 .reduce((sum, inv) => sum + Number(inv.amount), 0);
 
-            // Debt (cumulative) = all overdue invoices up to end of this month
             const debt = invoicesList
                 .filter(inv => new Date(inv.due_date) <= monthEnd && inv.calculatedStatus === 'overdue')
                 .reduce((sum, inv) => sum + Number(inv.amount) - Number(inv.amount_paid || 0), 0);
@@ -221,6 +216,112 @@ export default async function ReportsPage() {
     const weeklyReceivablesData = generateWeeklyData();
     const monthlyReceivablesData = generateMonthlyData();
 
+    // ADVANCED ANALYTICS: DSO & REVENUE CONCENTRATION
+
+    // 1. DSO Calculation (Days Sales Outstanding Trend) - Monthly
+    const generateDSOData = () => {
+        const data: Map<string, { totalDays: number, count: number }> = new Map();
+        const today = new Date();
+
+        // Initialize last 6 months
+        for (let i = -5; i <= 0; i++) {
+            const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+            const key = formatMonth(d);
+            data.set(key, { totalDays: 0, count: 0 });
+        }
+
+        invoicesList.forEach(inv => {
+            if (inv.paid_at && inv.issue_date) {
+                const paidDate = new Date(inv.paid_at);
+                const issueDate = new Date(inv.issue_date);
+                const daysToPay = Math.ceil((paidDate.getTime() - issueDate.getTime()) / (1000 * 60 * 60 * 24));
+
+                // Group by PAID month (when the money came in)
+                const key = formatMonth(paidDate);
+
+                if (data.has(key)) {
+                    const entry = data.get(key)!;
+                    entry.totalDays += daysToPay;
+                    entry.count += 1;
+                }
+            }
+        });
+
+        return Array.from(data.entries()).map(([month, val]) => ({
+            month,
+            days: val.count > 0 ? Math.round(val.totalDays / val.count) : 0
+        }));
+    };
+
+    const dsoData = generateDSOData();
+
+    // 2. Revenue Concentration (Top 5 Clients)
+    const generateRevenueConcentrationData = () => {
+        const debtorRevenue: Map<string, number> = new Map();
+
+        invoicesList.forEach(inv => {
+            const debtorName = (inv.debtors as any)?.name || 'Nieznany';
+            const amount = Number(inv.amount);
+            const current = debtorRevenue.get(debtorName) || 0;
+            debtorRevenue.set(debtorName, current + amount);
+        });
+
+        const totalRevenue = Array.from(debtorRevenue.values()).reduce((a, b) => a + b, 0);
+
+        return Array.from(debtorRevenue.entries())
+            .map(([name, amount]) => ({
+                name,
+                amount,
+                percentage: totalRevenue > 0 ? (amount / totalRevenue) * 100 : 0
+            }))
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 5);
+    };
+
+    const revenueConcentrationData = generateRevenueConcentrationData();
+
+
+    // Activity Chart Logic
+    const allSentActions = actionsList.filter(a => a.status === 'sent') || [];
+
+    const dailyActivityData = Array.from({ length: 24 }, (_, hour) => ({
+        hour: `${hour}:00`,
+        emails: allSentActions.filter(a => {
+            const d = new Date(a.sent_at || a.created_at);
+            const today = new Date();
+            return d.getHours() === hour && d.toDateString() === today.toDateString() && a.action_type === 'email';
+        }).length,
+    })).filter((_, i) => i >= 8 && i <= 18);
+
+    const dayNames = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
+    const activityByDay: Record<string, { emails: number }> = {};
+    dayNames.forEach(day => { activityByDay[day] = { emails: 0 }; });
+
+    allSentActions.forEach(action => {
+        const date = new Date(action.sent_at || action.created_at);
+        const dayName = dayNames[date.getDay()];
+        if (action.action_type === 'email') activityByDay[dayName].emails++;
+    });
+
+    const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({ day, emails: activityByDay[day].emails }));
+
+    const monthlyActivityData = (() => {
+        const data = [];
+        const today = new Date();
+        for (let i = 3; i >= 0; i--) {
+            const weekStart = new Date(today);
+            weekStart.setDate(weekStart.getDate() - (i * 7));
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            const weekActions = allSentActions.filter(a => {
+                const d = new Date(a.sent_at || a.created_at);
+                return d >= weekStart && d <= weekEnd && a.action_type === 'email';
+            });
+            data.push({ week: `Tydz. ${4 - i}`, emails: weekActions.length });
+        }
+        return data;
+    })();
+
     return (
         <div className="space-y-6">
             <Breadcrumbs />
@@ -228,9 +329,9 @@ export default async function ReportsPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">Raporty</h1>
+                    <h1 className="text-3xl font-bold">Raporty Sprzedaży</h1>
                     <p className="text-muted-foreground mt-1">
-                        Analiza skuteczności windykacji
+                        Analiza skuteczności windykacji i przychodów
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -253,21 +354,21 @@ export default async function ReportsPage() {
             </div>
 
             {/* Empty state */}
-            {!hasData && (
+            {!hasInvoicesData && (
                 <Card className="py-12">
                     <CardContent className="text-center">
                         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
                             <BarChart3 className="h-8 w-8 text-muted-foreground" />
                         </div>
-                        <h3 className="text-lg font-medium mb-2">Brak danych do raportów</h3>
+                        <h3 className="text-lg font-medium mb-2">Brak danych przychodowych</h3>
                         <p className="text-muted-foreground">
-                            Dodaj faktury i kontrahentów, a tutaj pojawią się statystyki
+                            Dodaj faktury sprzedaży, aby zobaczyć statystyki windykacji
                         </p>
                     </CardContent>
                 </Card>
             )}
 
-            {hasData && (
+            {hasInvoicesData && (
                 <>
                     {/* Summary stats */}
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -295,14 +396,66 @@ export default async function ReportsPage() {
                         </Card>
                     </div>
 
-                    {/* Charts */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* NEW: Advanced Analytics Charts */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <DSOChart data={dsoData} />
+                        <RevenueConcentrationChart data={revenueConcentrationData} />
+                    </div>
+
+                    {/* Charts Grid 1: Revenue & Activity */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <ReceivablesChart
                             data={monthlyReceivablesData}
                             dailyData={dailyReceivablesData}
                             weeklyData={weeklyReceivablesData}
                         />
+                        <ActivityChart
+                            data={weeklyActivityData}
+                            dailyData={dailyActivityData}
+                            monthlyData={monthlyActivityData}
+                        />
+                    </div>
+
+                    {/* Charts Grid 2: Status & Top Debtors */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <StatusPieChart data={statusChartData} />
+
+                        {debtorsWithStats.length > 0 && (
+                            <Card className="h-full">
+                                <CardHeader>
+                                    <CardTitle>Najwięksi dłużnicy (Wg. zadłużenia)</CardTitle>
+                                    <CardDescription>Kontrahenci z największym zadłużeniem</CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="space-y-4">
+                                        {debtorsWithStats.map((debtor, i) => (
+                                            <div key={debtor.id} className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                                                        {i + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium">{debtor.name}</p>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {debtor.overdueInvoices > 0 && (
+                                                                <span className="text-red-600">{debtor.overdueInvoices} przeterminowanych • </span>
+                                                            )}
+                                                            {debtor.totalInvoices} faktur
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="font-semibold">{formatCurrency(debtor.totalDebt)}</p>
+                                                    <p className={`text-xs ${debtor.paymentScore >= 50 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        Score: {debtor.paymentScore}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
                     </div>
 
                     {/* Success rate */}
@@ -326,44 +479,6 @@ export default async function ReportsPage() {
                             </div>
                         </CardContent>
                     </Card>
-
-                    {/* Top debtors */}
-                    {debtorsWithStats.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Najwięksi dłużnicy</CardTitle>
-                                <CardDescription>Kontrahenci z największym zadłużeniem</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4">
-                                    {debtorsWithStats.map((debtor, i) => (
-                                        <div key={debtor.id} className="flex items-center justify-between">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
-                                                    {i + 1}
-                                                </div>
-                                                <div>
-                                                    <p className="font-medium">{debtor.name}</p>
-                                                    <p className="text-xs text-muted-foreground">
-                                                        {debtor.overdueInvoices > 0 && (
-                                                            <span className="text-red-600">{debtor.overdueInvoices} przeterminowanych • </span>
-                                                        )}
-                                                        {debtor.totalInvoices} faktur
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="font-semibold">{formatCurrency(debtor.totalDebt)}</p>
-                                                <p className={`text-xs ${debtor.paymentScore >= 50 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    Score: {debtor.paymentScore}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
 
                     {/* Quick reports */}
                     <Card>

@@ -14,7 +14,7 @@ export default async function InvoicesPage({
     searchParams: Promise<{ status?: string }>;
 }) {
     const params = await searchParams;
-    const initialStatus = params?.status || 'all';
+    const initialStatus = params?.status || 'unpaid';
     const supabase = await createClient();
 
     // Fetch real invoices with debtor names

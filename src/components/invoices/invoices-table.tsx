@@ -60,7 +60,9 @@ export function InvoicesTable({ invoices, initialStatusFilter = 'all' }: Invoice
         }
 
         // Status filter
-        if (statusFilter !== 'all') {
+        if (statusFilter === 'unpaid') {
+            result = result.filter(inv => inv.calculatedStatus !== 'paid');
+        } else if (statusFilter !== 'all') {
             result = result.filter(inv => inv.calculatedStatus === statusFilter);
         }
 
@@ -131,6 +133,7 @@ export function InvoicesTable({ invoices, initialStatusFilter = 'all' }: Invoice
                                 <SelectValue placeholder="Status" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="unpaid">Do spłaty (Aktywne)</SelectItem>
                                 <SelectItem value="all">Wszystkie</SelectItem>
                                 <SelectItem value="pending">Oczekujące</SelectItem>
                                 <SelectItem value="due_soon">Bliski termin</SelectItem>

@@ -301,6 +301,7 @@ export class KSeFClient {
         dateTo: Date;
         pageSize?: number;
         pageOffset?: number;
+        subjectType?: 'Subject1' | 'Subject2'; // Subject1 = Sales, Subject2 = Purchase
     }): Promise<KSeFInvoiceListResponse | null> {
         try {
             if (!this.session || !this.accessToken) {
@@ -315,8 +316,9 @@ export class KSeFClient {
             const dateFromStr = params.dateFrom.toISOString();
             const dateToStr = params.dateTo.toISOString();
             const pageSize = params.pageSize || 500; // Increased to reduce requests
+            const subjectType = params.subjectType || 'Subject1';
 
-            console.log(`[KSeF] Fetching invoices from ${dateFromStr.split('T')[0]} to ${dateToStr.split('T')[0]}`);
+            console.log(`[KSeF] Fetching invoices (${subjectType}) from ${dateFromStr.split('T')[0]} to ${dateToStr.split('T')[0]}`);
 
             // Collect all invoices from all pages
             const allInvoices: unknown[] = [];
@@ -336,7 +338,7 @@ export class KSeFClient {
                         'Authorization': `Bearer ${this.accessToken}`,
                     },
                     body: JSON.stringify({
-                        subjectType: 'Subject1',
+                        subjectType: subjectType,
                         dateRange: {
                             dateType: 'PermanentStorage',
                             from: dateFromStr,
