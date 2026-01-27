@@ -84,8 +84,8 @@ export default function NewCostPage() {
 
     // Calculate Gross automatically
     useEffect(() => {
-        const net = parseFloat(amountNet);
-        const rate = parseFloat(vatRate);
+        const net = parseFloat(amountNet || '0');
+        const rate = parseFloat(vatRate || '0');
         if (!isNaN(net) && !isNaN(rate)) {
             const gross = net * (1 + rate / 100);
             setValue('amount', gross.toFixed(2));
