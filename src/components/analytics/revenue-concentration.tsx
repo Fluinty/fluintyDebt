@@ -41,7 +41,7 @@ export function RevenueConcentrationChart({ data }: RevenueConcentrationChartPro
                             <Tooltip
                                 cursor={{ fill: 'transparent' }}
                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                                formatter={(value: number) => [`${value.toLocaleString('pl-PL')} zł`, 'Przychód']}
+                                formatter={(value: any) => [`${Number(value).toLocaleString('pl-PL')} zł`, 'Przychód']}
                             />
                             <Bar dataKey="amount" radius={[0, 4, 4, 0]}>
                                 {data.map((entry, index) => (
