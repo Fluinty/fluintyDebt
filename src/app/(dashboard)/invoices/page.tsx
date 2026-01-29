@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { InvoicesTable } from '@/components/invoices/invoices-table';
+import { KSeFImportButton } from '@/components/ksef/ksef-import-button';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import { createClient } from '@/lib/supabase/server';
 import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calculations';
@@ -16,6 +17,18 @@ export default async function InvoicesPage({
     const params = await searchParams;
     const initialStatus = params?.status || 'unpaid';
     const supabase = await createClient();
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    // Fetch KSeF settings
+    const { data: ksefSettings } = await supabase
+        .from('user_ksef_settings')
+        .select('is_enabled, ksef_token_encrypted')
+        .eq('user_id', user.id)
+        .single();
+
+    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
 
     // Fetch real invoices with debtor names
     const { data: invoices } = await supabase
@@ -56,10 +69,14 @@ export default async function InvoicesPage({
                     </p>
                 </div>
                 <div className="flex gap-2">
+                    <KSeFImportButton
+                        isConfigured={isKSeFConfigured}
+                        syncMode="sales"
+                        variant="outline"
+                    />
                     <Link href="/invoices/import">
-                        <Button variant="outline">
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Import
+                        <Button variant="ghost" size="icon" title="Import z pliku">
+                            <FileDown className="h-4 w-4" />
                         </Button>
                     </Link>
                     <Link href="/invoices/new">

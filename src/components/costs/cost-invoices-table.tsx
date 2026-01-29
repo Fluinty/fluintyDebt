@@ -20,7 +20,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { markCostInvoiceAsPaid } from '@/app/actions/cost-actions';
+import { markCostAsPaid } from '@/app/actions/cost-actions';
 import { CostStatusBadge } from '@/components/costs/cost-status-badge';
 import { PayWithQR } from '@/components/costs/pay-with-qr';
 import { formatCurrency } from '@/lib/utils/format-currency';
@@ -40,12 +40,8 @@ function CostInvoiceActions({ invoice }: { invoice: CostInvoice }) {
     const handleMarkAsPaid = async () => {
         setIsLoading(true);
         try {
-            const result = await markCostInvoiceAsPaid(invoice.id);
-            if (result.error) {
-                toast.error(result.error);
-            } else {
-                toast.success('Faktura oznaczona jako opłacona');
-            }
+            await markCostAsPaid(invoice.id);
+            toast.success('Faktura oznaczona jako opłacona');
         } catch (error) {
             toast.error('Wystąpił błąd');
         } finally {
@@ -269,18 +265,22 @@ export function CostInvoicesTable({ invoices }: CostInvoicesTableProps) {
                                     filteredInvoices.map((invoice) => (
                                         <tr key={invoice.id} className="border-b hover:bg-muted/30 transition-colors">
                                             <td className="p-4 font-medium">
-                                                {invoice.invoice_number}
-                                                {invoice.category && (
-                                                    <div className="text-xs text-muted-foreground mt-0.5 capitalize">
-                                                        {invoice.category}
-                                                    </div>
-                                                )}
+                                                <Link href={`/costs/${invoice.id}`} className="hover:underline flex flex-col">
+                                                    <span>{invoice.invoice_number}</span>
+                                                    {invoice.category && (
+                                                        <span className="text-xs text-muted-foreground mt-0.5 capitalize">
+                                                            {invoice.category}
+                                                        </span>
+                                                    )}
+                                                </Link>
                                             </td>
                                             <td className="p-4">
-                                                <div className="font-medium">{invoice.contractor_name}</div>
-                                                {invoice.contractor_nip && (
-                                                    <div className="text-xs text-muted-foreground">NIP: {invoice.contractor_nip}</div>
-                                                )}
+                                                <Link href={`/costs/${invoice.id}`} className="block group">
+                                                    <div className="font-medium group-hover:underline">{invoice.contractor_name}</div>
+                                                    {invoice.contractor_nip && (
+                                                        <div className="text-xs text-muted-foreground">NIP: {invoice.contractor_nip}</div>
+                                                    )}
+                                                </Link>
                                             </td>
                                             <td className="p-4">
                                                 <div className="font-semibold">{formatCurrency(invoice.amount)}</div>

@@ -96,79 +96,76 @@ export default function RegisterPage() {
     };
 
     return (
-        <Card className="border-0 shadow-none lg:border lg:shadow-sm">
-            <CardHeader className="space-y-1 text-center lg:text-left">
-                <div className="lg:hidden mb-6">
-                    <h1 className="text-2xl font-bold text-primary">FluintyDebt</h1>
-                    <p className="text-muted-foreground text-sm">AI-powered debt collection</p>
-                </div>
-                <CardTitle className="text-2xl">Utwórz konto</CardTitle>
-                <CardDescription>
+        <div className="space-y-6">
+            <div className="space-y-2 text-center">
+                <h1 className="text-3xl font-bold tracking-tight">Utwórz konto</h1>
+                <p className="text-muted-foreground">
                     Rozpocznij bezpłatny okres próbny już dziś
-                </CardDescription>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    {error && (
-                        <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-950 dark:text-red-400 rounded-md">
-                            {error}
-                        </div>
+                </p>
+            </div>
+
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                {error && (
+                    <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-950/50 dark:text-red-400 rounded-md border border-red-200 dark:border-red-900">
+                        {error}
+                    </div>
+                )}
+
+                <div className="space-y-2">
+                    <Label htmlFor="fullName">Imię i nazwisko</Label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            id="fullName"
+                            type="text"
+                            placeholder="Jan Kowalski"
+                            className="h-11 bg-background pl-10"
+                            disabled={isLoading}
+                            {...register('fullName')}
+                        />
+                    </div>
+                    {errors.fullName && (
+                        <p className="text-sm text-red-600">{errors.fullName.message}</p>
                     )}
+                </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="fullName">Imię i nazwisko</Label>
-                        <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="fullName"
-                                type="text"
-                                placeholder="Jan Kowalski"
-                                className="pl-10"
-                                disabled={isLoading}
-                                {...register('fullName')}
-                            />
-                        </div>
-                        {errors.fullName && (
-                            <p className="text-sm text-red-600">{errors.fullName.message}</p>
-                        )}
+                <div className="space-y-2">
+                    <Label htmlFor="companyName">Nazwa firmy</Label>
+                    <div className="relative">
+                        <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            id="companyName"
+                            type="text"
+                            placeholder="Moja Firma Sp. z o.o."
+                            className="h-11 bg-background pl-10"
+                            disabled={isLoading}
+                            {...register('companyName')}
+                        />
                     </div>
+                    {errors.companyName && (
+                        <p className="text-sm text-red-600">{errors.companyName.message}</p>
+                    )}
+                </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="companyName">Nazwa firmy</Label>
-                        <div className="relative">
-                            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="companyName"
-                                type="text"
-                                placeholder="Moja Firma Sp. z o.o."
-                                className="pl-10"
-                                disabled={isLoading}
-                                {...register('companyName')}
-                            />
-                        </div>
-                        {errors.companyName && (
-                            <p className="text-sm text-red-600">{errors.companyName.message}</p>
-                        )}
+                <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            id="email"
+                            type="email"
+                            placeholder="twoj@email.pl"
+                            className="h-11 bg-background pl-10"
+                            disabled={isLoading}
+                            {...register('email')}
+                        />
                     </div>
+                    {errors.email && (
+                        <p className="text-sm text-red-600">{errors.email.message}</p>
+                    )}
+                </div>
 
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <div className="relative">
-                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="email"
-                                type="email"
-                                placeholder="twoj@email.pl"
-                                className="pl-10"
-                                disabled={isLoading}
-                                {...register('email')}
-                            />
-                        </div>
-                        {errors.email && (
-                            <p className="text-sm text-red-600">{errors.email.message}</p>
-                        )}
-                    </div>
-
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="password">Hasło</Label>
                         <div className="relative">
@@ -176,15 +173,15 @@ export default function RegisterPage() {
                             <Input
                                 id="password"
                                 type={showPassword ? 'text' : 'password'}
-                                placeholder="Minimum 8 znaków"
-                                className="pl-10 pr-10"
+                                placeholder="Min. 8 znaków"
+                                className="h-11 bg-background pl-10 pr-10"
                                 disabled={isLoading}
                                 {...register('password')}
                             />
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                             >
                                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </button>
@@ -195,14 +192,14 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Potwierdź hasło</Label>
+                        <Label htmlFor="confirmPassword">Potwierdź</Label>
                         <div className="relative">
                             <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
                                 id="confirmPassword"
                                 type={showPassword ? 'text' : 'password'}
-                                placeholder="Powtórz hasło"
-                                className="pl-10"
+                                placeholder="Powtórz"
+                                className="h-11 bg-background pl-10"
                                 disabled={isLoading}
                                 {...register('confirmPassword')}
                             />
@@ -211,39 +208,37 @@ export default function RegisterPage() {
                             <p className="text-sm text-red-600">{errors.confirmPassword.message}</p>
                         )}
                     </div>
-
-                    <Button type="submit" className="w-full" disabled={isLoading}>
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Tworzenie konta...
-                            </>
-                        ) : (
-                            'Utwórz konto'
-                        )}
-                    </Button>
-
-                    <p className="text-xs text-center text-muted-foreground">
-                        Rejestrując się, akceptujesz{' '}
-                        <Link href="/terms" className="text-primary hover:underline">
-                            regulamin
-                        </Link>{' '}
-                        i{' '}
-                        <Link href="/privacy" className="text-primary hover:underline">
-                            politykę prywatności
-                        </Link>
-                    </p>
-                </form>
-
-                <div className="mt-6 text-center">
-                    <p className="text-sm text-muted-foreground">
-                        Masz już konto?{' '}
-                        <Link href="/login" className="text-primary font-medium hover:underline">
-                            Zaloguj się
-                        </Link>
-                    </p>
                 </div>
-            </CardContent>
-        </Card>
+
+                <Button type="submit" className="w-full h-11 text-base font-medium transition-all hover:ring-2 hover:ring-primary/20 hover:ring-offset-2" disabled={isLoading}>
+                    {isLoading ? (
+                        <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Tworzenie konta...
+                        </>
+                    ) : (
+                        'Utwórz konto'
+                    )}
+                </Button>
+
+                <p className="text-xs text-center text-muted-foreground pt-2">
+                    Rejestrując się, akceptujesz{' '}
+                    <Link href="/terms" className="text-primary hover:underline">
+                        regulamin
+                    </Link>{' '}
+                    i{' '}
+                    <Link href="/privacy" className="text-primary hover:underline">
+                        politykę prywatności
+                    </Link>
+                </p>
+            </form>
+
+            <div className="text-center text-sm">
+                Masz już konto?{' '}
+                <Link href="/login" className="font-semibold text-primary hover:underline underline-offset-4">
+                    Zaloguj się
+                </Link>
+            </div>
+        </div>
     );
 }

@@ -2,76 +2,52 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { z } from 'zod';
 
-const costInvoiceSchema = z.object({
-    contractor_name: z.string().min(1, 'Nazwa dostawcy jest wymagana'),
-    contractor_nip: z.string().optional().nullable(),
-    vendor_id: z.string().uuid().optional().nullable(),
-    invoice_number: z.string().min(1, 'Numer faktury jest wymagany'),
-    amount: z.number().min(0.01, 'Kwota musi być większa od 0'),
-    amount_net: z.number().optional().nullable(),
-    vat_rate: z.string().optional().nullable(),
-    vat_amount: z.number().optional().nullable(),
-    amount_gross: z.number().optional().nullable(),
-    currency: z.string().default('PLN'),
-    issue_date: z.string().min(1, 'Data wystawienia jest wymagana'),
-    due_date: z.string().min(1, 'Termin płatności jest wymagany'),
-    account_number: z.string().optional().nullable(),
-    bank_name: z.string().optional().nullable(),
-    description: z.string().optional().nullable(),
-    category: z.string().default('other'),
-    payment_status: z.enum(['to_pay', 'paid']).default('to_pay'),
-});
-
-export type CreateCostInvoiceInput = z.infer<typeof costInvoiceSchema>;
-
-export async function createCostInvoice(data: CreateCostInvoiceInput) {
+export async function markCostAsPaid(id: string) {
     const supabase = await createClient();
 
+    // Get current user
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-        return { error: 'Unauthorized' };
+        throw new Error('Unauthorized');
     }
 
-    try {
-        const validated = costInvoiceSchema.parse(data);
+    // Get the full amount to set as paid
+    const { data: invoice, error: fetchError } = await supabase
+        .from('cost_invoices')
+        .select('amount_gross, amount')
+        .eq('id', id)
+        .eq('user_id', user.id)
+        .single();
 
-        // Check for duplicates
-        const { data: existing } = await supabase
-            .from('cost_invoices')
-            .select('id')
-            .eq('invoice_number', validated.invoice_number)
-            .eq('user_id', user.id)
-            .single();
-
-        if (existing) {
-            return { error: 'Faktura o tym numerze już istnieje' };
-        }
-
-        const { error } = await supabase
-            .from('cost_invoices')
-            .insert({
-                user_id: user.id,
-                ...validated,
-                paid_at: validated.payment_status === 'paid' ? new Date().toISOString() : null,
-            });
-
-        if (error) throw error;
-
-        revalidatePath('/costs');
-        return { success: true };
-
-    } catch (error) {
-        console.error('Create cost invoice error:', error);
-        if (error instanceof z.ZodError) {
-            return { error: error.issues[0]?.message || 'Validation error' };
-        }
-        return { error: 'Failed to create invoice' };
+    if (fetchError || !invoice) {
+        throw new Error('Invoice not found');
     }
+
+    const fullAmount = invoice.amount_gross || invoice.amount;
+
+    // Update status to paid
+    const { error } = await supabase
+        .from('cost_invoices')
+        .update({
+            payment_status: 'paid',
+            paid_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+    if (error) {
+        console.error('Error marking cost as paid:', error);
+        throw new Error('Failed to update cost invoice');
+    }
+
+    revalidatePath(`/costs/${id}`);
+    revalidatePath('/costs');
+    revalidatePath('/dashboard');
+    return { success: true };
 }
 
-export async function markCostInvoiceAsPaid(invoiceId: string) {
+export async function createCostInvoice(data: any) {
     const supabase = await createClient();
 
     const { data: { user } } = await supabase.auth.getUser();
@@ -79,23 +55,49 @@ export async function markCostInvoiceAsPaid(invoiceId: string) {
         return { error: 'Unauthorized' };
     }
 
-    try {
-        const { error } = await supabase
-            .from('cost_invoices')
-            .update({
-                payment_status: 'paid',
-                paid_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
-            })
-            .eq('id', invoiceId)
-            .eq('user_id', user.id);
+    // Prepare insert payload
+    // Note: Schema uses 'amount' and 'amount_gross'. We set both for compatibility.
+    const payload = {
+        user_id: user.id,
+        invoice_number: data.invoice_number,
+        contractor_name: data.contractor_name,
+        contractor_nip: data.contractor_nip || null,
+        vendor_id: data.vendor_id || null, // Optional link to vendor
 
-        if (error) throw error;
+        amount: data.amount, // Gross amount
+        amount_gross: data.amount_gross || data.amount,
+        amount_net: data.amount_net,
+        vat_rate: data.vat_rate,
+        vat_amount: data.vat_amount || (data.amount - data.amount_net),
+        currency: data.currency || 'PLN',
 
-        revalidatePath('/costs');
-        return { success: true };
-    } catch (error) {
-        console.error('Error marking invoice as paid:', error);
-        return { error: 'Failed to update invoice status' };
+        issue_date: data.issue_date,
+        due_date: data.due_date,
+
+        payment_status: data.payment_status || 'to_pay',
+        // status: 'pending', // Schema check: 014 uses payment_status ('to_pay', 'paid'). 
+        // Some older components might look for 'status' ('pending', 'overdue'). 
+        // But cost_invoices table in 014 doesn't have 'status' column, it has 'payment_status'.
+        // Wait, standard 'invoices' table has 'status'. 'cost_invoices' has 'payment_status'.
+
+        account_number: data.account_number || null,
+        bank_name: data.bank_name || null,
+        description: data.description || null,
+        category: data.category || 'other',
+    };
+
+    const { error } = await supabase
+        .from('cost_invoices')
+        .insert(payload)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error creating cost invoice:', error);
+        return { error: 'Failed to create invoice: ' + error.message };
     }
+
+    revalidatePath('/costs');
+    revalidatePath('/dashboard');
+    return { success: true };
 }

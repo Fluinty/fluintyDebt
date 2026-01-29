@@ -4,18 +4,27 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
 import { CostInvoicesTable } from '@/components/costs/cost-invoices-table';
+import { KSeFImportButton } from '@/components/ksef/ksef-import-button';
 import { createClient } from '@/lib/supabase/server';
 import { formatCurrency } from '@/lib/utils/format-currency';
 import { requireModule } from '@/lib/auth/module-guard';
 
 export default async function CostsPage() {
-    // Check permissions
-    await requireModule('costs');
+
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) return null;
+
+    // Fetch KSeF settings
+    const { data: ksefSettings } = await supabase
+        .from('user_ksef_settings')
+        .select('is_enabled, ksef_token_encrypted')
+        .eq('user_id', user.id)
+        .single();
+
+    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
 
     // Fetch cost invoices
     const { data: invoices } = await supabase
@@ -83,13 +92,11 @@ export default async function CostsPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    {/* Placeholder for import - to be implemented */}
-                    <Link href="/settings">
-                        <Button variant="outline">
-                            <Receipt className="h-4 w-4 mr-2" />
-                            Import KSeF
-                        </Button>
-                    </Link>
+                    <KSeFImportButton
+                        isConfigured={isKSeFConfigured}
+                        syncMode="costs"
+                        variant="outline"
+                    />
                     <Link href="/costs/new">
                         <Button>
                             <Plus className="h-4 w-4 mr-2" />

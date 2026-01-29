@@ -23,6 +23,7 @@ import { CostTrendChart } from '@/components/dashboard/cost-charts';
 import { BankAccountWidget } from '@/components/dashboard/bank-account-widget';
 import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 import { UpcomingWeek } from '@/components/dashboard/upcoming-week';
+import { KSeFImportButton } from '@/components/ksef/ksef-import-button';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
@@ -67,6 +68,11 @@ export default async function DashboardPage() {
     }));
     const costInvoicesList = costInvoices || [];
     const debtorsList = debtors || [];
+
+    // Check enabled modules
+    const modules = (profile?.modules as { sales?: boolean; costs?: boolean }) || { sales: true, costs: true };
+    const showSales = modules.sales !== false;
+    const showCosts = modules.costs !== false;
 
     // Calculate debtors with unpaid invoices
     const debtorIdsWithUnpaidInvoices = new Set(
@@ -128,23 +134,23 @@ export default async function DashboardPage() {
         .slice(0, 5);
 
     // Prepare data for UpcomingWeek
-    const upcomingSalesInvoices = invoicesList.map(inv => ({
+    const upcomingSalesInvoices = showSales ? invoicesList.map(inv => ({
         id: inv.id,
         invoice_number: inv.invoice_number,
         amount: inv.amount,
         amount_gross: inv.amount_gross,
         due_date: inv.due_date,
         clientName: (inv.debtors as any)?.name || 'Nieznany klient',
-    }));
+    })) : [];
 
-    const upcomingCostInvoices = costInvoicesList.map(inv => ({
+    const upcomingCostInvoices = showCosts ? costInvoicesList.map(inv => ({
         id: inv.id,
         invoice_number: inv.invoice_number,
         amount: inv.amount,
         amount_gross: inv.amount_gross,
         due_date: inv.due_date,
         clientName: inv.contractor_name,
-    }));
+    })) : [];
 
     // ADVANCED ANALYTICS: RUNWAY & PROFIT MARGIN
     const currentBalance = Number(profile?.current_balance || 0);
@@ -359,18 +365,28 @@ export default async function DashboardPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Link href="/costs/new">
-                        <Button variant="outline" className="border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30">
-                            <TrendingDown className="h-4 w-4 mr-2 text-red-500" />
-                            Dodaj koszt
-                        </Button>
-                    </Link>
-                    <Link href="/invoices/new">
-                        <Button>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Nowa faktura
-                        </Button>
-                    </Link>
+                    <KSeFImportButton
+                        isConfigured={isKSeFConfigured}
+                        syncMode="all"
+                        variant="outline"
+                        className="hidden sm:flex"
+                    />
+                    {showCosts && (
+                        <Link href="/costs/new">
+                            <Button variant="outline" className="border-red-200 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30">
+                                <TrendingDown className="h-4 w-4 mr-2 text-red-500" />
+                                Dodaj koszt
+                            </Button>
+                        </Link>
+                    )}
+                    {showSales && (
+                        <Link href="/invoices/new">
+                            <Button>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Nowa faktura
+                            </Button>
+                        </Link>
+                    )}
                 </div>
             </div>
 
@@ -380,37 +396,48 @@ export default async function DashboardPage() {
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
                         {/* KPI Cards */}
                         <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do odzyskania</CardTitle>
-                                    <TrendingUp className="h-4 w-4 text-emerald-500" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceivables)}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">{unpaidInvoices.length} faktur sprzedaży</p>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="relative overflow-hidden">
-                                {!(profile?.modules as any)?.costs && (
-                                    <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                        <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                            <Lock className="h-4 w-4 text-muted-foreground" />
+                            <Link href="/invoices" className="block transition-transform hover:scale-[1.01]">
+                                <Card className="relative overflow-hidden h-full">
+                                    {!showSales && (
+                                        <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                            <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                                <Lock className="h-4 w-4 text-muted-foreground" />
+                                            </div>
                                         </div>
-                                    </div>
-                                )}
-                                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do zapłaty</CardTitle>
-                                    <TrendingDown className="h-4 w-4 text-red-500" />
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalPayables)}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">{costInvoicesList.filter(c => c.payment_status !== 'paid').length} faktur kosztowych</p>
-                                </CardContent>
-                            </Card>
+                                    )}
+                                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                        <CardTitle className="text-sm font-medium text-muted-foreground">Do odzyskania</CardTitle>
+                                        <TrendingUp className="h-4 w-4 text-emerald-500" />
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceivables)}</div>
+                                        <p className="text-xs text-muted-foreground mt-1">{unpaidInvoices.length} faktur sprzedaży</p>
+                                    </CardContent>
+                                </Card>
+                            </Link>
+
+                            <Link href="/costs" className="block transition-transform hover:scale-[1.01]">
+                                <Card className="relative overflow-hidden h-full">
+                                    {!showCosts && (
+                                        <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                            <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                                <Lock className="h-4 w-4 text-muted-foreground" />
+                                            </div>
+                                        </div>
+                                    )}
+                                    <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                        <CardTitle className="text-sm font-medium text-muted-foreground">Do zapłaty</CardTitle>
+                                        <TrendingDown className="h-4 w-4 text-red-500" />
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalPayables)}</div>
+                                        <p className="text-xs text-muted-foreground mt-1">{costInvoicesList.filter(c => c.payment_status !== 'paid').length} faktur kosztowych</p>
+                                    </CardContent>
+                                </Card>
+                            </Link>
 
                             <Card className="relative overflow-hidden">
-                                {!(profile?.modules as any)?.costs && (
+                                {(!showSales || !showCosts) && (
                                     <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
                                         <div className="bg-background/80 p-2 rounded-full shadow-sm">
                                             <Lock className="h-4 w-4 text-muted-foreground" />
@@ -434,14 +461,21 @@ export default async function DashboardPage() {
                         <div className="lg:col-span-1">
                             <BankAccountWidget
                                 initialBalance={Number(profile?.current_balance || 0)}
-                                isLocked={!(profile?.modules as any)?.costs}
+                                isLocked={!showSales || !showCosts}
                             />
                         </div>
                     </div>
 
                     {/* NEW SECTION: STRATEGIC HEALTH METRICS */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Card className="border-l-4 border-l-purple-500">
+                        <Card className="border-l-4 border-l-purple-500 relative overflow-hidden">
+                            {!showSales && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Runway (Przeżywalność)</CardTitle>
                                 <TrendingUp className="h-4 w-4 text-purple-500" />
@@ -456,7 +490,14 @@ export default async function DashboardPage() {
                             </CardContent>
                         </Card>
 
-                        <Card className={`border-l-4 ${marginData.margin >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'}`}>
+                        <Card className={`border-l-4 ${marginData.margin >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'} relative overflow-hidden`}>
+                            {!showSales && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-sm font-medium text-muted-foreground">Marża (Ten m-c)</CardTitle>
                                 {marginData.margin >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
@@ -475,12 +516,19 @@ export default async function DashboardPage() {
                     {/* Cash Flow Forecast */}
                     <CashFlowChart
                         data={cashFlowData}
-                        isLocked={!(profile?.modules as any)?.costs}
+                        isLocked={!showSales || !showCosts}
                     />
 
                     {/* Action items */}
                     {actionItems.length > 0 && (
-                        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20">
+                        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 relative overflow-hidden">
+                            {!showSales && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
                             <CardHeader className="pb-3">
                                 <div className="flex items-center gap-2">
                                     <AlertTriangle className="h-5 w-5 text-amber-500" />
@@ -513,21 +561,47 @@ export default async function DashboardPage() {
 
                     {/* Charts Grid: Receivables & Cost Trend */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <ReceivablesChart
-                            data={monthlyReceivablesData}
-                            dailyData={dailyReceivablesData}
-                            weeklyData={weeklyReceivablesData}
-                        />
+                        <div className="relative rounded-xl">
+                            {!showSales && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
+                            <ReceivablesChart
+                                data={monthlyReceivablesData}
+                                dailyData={dailyReceivablesData}
+                                weeklyData={weeklyReceivablesData}
+                            />
+                        </div>
+
                         {/* Cost Trend (reused from Reports) */}
-                        <CostTrendChart
-                            data={costTrendData}
-                        />
+                        <div className="relative rounded-xl">
+                            {!showCosts && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
+                            <CostTrendChart
+                                data={costTrendData}
+                            />
+                        </div>
                     </div>
 
                     {/* Urgent Invoices & Upcoming Week */}
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Urgent Invoices */}
-                        <Card className="h-full">
+                        <Card className="h-full relative overflow-hidden">
+                            {!showSales && (
+                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                                    </div>
+                                </div>
+                            )}
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
                                 <CardTitle className="text-lg">Pilne faktury</CardTitle>
                                 <Link href="/invoices">
@@ -557,10 +631,12 @@ export default async function DashboardPage() {
                         </Card>
 
                         {/* Upcoming Week */}
-                        <UpcomingWeek
-                            salesInvoices={upcomingSalesInvoices}
-                            costInvoices={upcomingCostInvoices}
-                        />
+                        <div>
+                            <UpcomingWeek
+                                salesInvoices={upcomingSalesInvoices}
+                                costInvoices={upcomingCostInvoices}
+                            />
+                        </div>
                     </div>
                 </>
             )}
@@ -576,8 +652,8 @@ export default async function DashboardPage() {
                             Zacznij od dodania faktur, aby zobaczyć analizy.
                         </p>
                         <div className="flex justify-center gap-4">
-                            <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>
-                            <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>
+                            {showSales && <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>}
+                            {showCosts && <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>}
                         </div>
                     </CardContent>
                 </Card>

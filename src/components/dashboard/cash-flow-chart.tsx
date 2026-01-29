@@ -62,17 +62,28 @@ export function CashFlowChart({ data, isLocked = false }: CashFlowChartProps) {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                             <XAxis
                                 dataKey="date"
-                                tickFormatter={(val) => new Date(val).getDate().toString()}
+                                tickFormatter={(val) => {
+                                    const d = new Date(val);
+                                    const day = d.getDate();
+                                    // Show month name on the 1st day, or every ~5 days if needed, 
+                                    // but user specifically asked for month boundary clarity.
+                                    if (day === 1) {
+                                        return d.toLocaleDateString('pl-PL', { day: 'numeric', month: 'short' });
+                                    }
+                                    return day.toString();
+                                }}
                                 tick={{ fontSize: 12 }}
                                 tickLine={false}
                                 axisLine={false}
+                                minTickGap={15} // Ensure labels don't overlap
                             />
                             <YAxis
-                                tickFormatter={(val) => `${val / 1000}k`}
+                                tickFormatter={(val) => `${Math.round(val / 1000)}k`}
                                 domain={[minBalance - padding, maxBalance + padding]}
                                 tick={{ fontSize: 12 }}
                                 tickLine={false}
                                 axisLine={false}
+                                width={40}
                             />
                             <Tooltip
                                 labelFormatter={(val) => formatDate(val)}

@@ -57,7 +57,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
         : false;
 
     if (!hasCostModule) {
-        return { success: false, error: 'Moduł kosztowy nie jest aktywny' };
+        return { success: true, invoicesImported: 0, warning: 'Moduł kosztowy nie jest aktywny' };
     }
 
     try {

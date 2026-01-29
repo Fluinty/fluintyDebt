@@ -47,8 +47,7 @@ export async function GET(request: NextRequest) {
         .select('*')
         .eq('is_enabled', true)
         .eq('sync_frequency', 'daily')
-        .not('ksef_token_encrypted', 'is', null)
-        .lte('sync_time', currentTime);
+        .not('ksef_token_encrypted', 'is', null);
 
     if (fetchError) {
         console.error('[KSeF Cron] Error fetching users:', fetchError);

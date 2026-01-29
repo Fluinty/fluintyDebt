@@ -311,11 +311,18 @@ export async function hasKSeFConfigured(): Promise<boolean> {
  * Sync invoices from KSeF
  * @param daysBack - number of days to look back (default 7)
  * @param maxInvoices - optional limit on number of invoices to import
+ * @param syncMode - 'all' (default), 'sales', or 'costs'
  */
-export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: number): Promise<{
+export async function syncKSeFInvoices(
+    daysBack: number = 7,
+    maxInvoices?: number,
+    syncMode: 'all' | 'sales' | 'costs' = 'all'
+): Promise<{
     success: boolean;
     invoicesFound?: number;
     invoicesImported?: number;
+    salesImported?: number;
+    costsImported?: number;
     error?: string;
     warning?: string;
 }> {
@@ -324,6 +331,29 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
         return { success: false, error: 'Unauthorized' };
+    }
+
+    // Get user profile to check enabled modules
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('modules')
+        .eq('id', user.id)
+        .single();
+
+    const modules = (profile?.modules as { sales?: boolean; costs?: boolean }) || { sales: true, costs: true };
+    const hasSalesModule = modules.sales !== false;
+    const hasCostsModule = modules.costs !== false;
+
+    // Determine what to sync based on syncMode and module access
+    const shouldSyncSales = (syncMode === 'all' || syncMode === 'sales') && hasSalesModule;
+    const shouldSyncCosts = (syncMode === 'all' || syncMode === 'costs') && hasCostsModule;
+
+    if (!shouldSyncSales && !shouldSyncCosts) {
+        return {
+            success: true,
+            invoicesImported: 0,
+            warning: 'Brak aktywnych modułów do synchronizacji.',
+        };
     }
 
     // Get settings with actual token
@@ -352,351 +382,359 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
         const decryptedToken = decryptToken(settings.ksef_token_encrypted);
         const client = createKSeFClient(decryptedToken, settings.ksef_environment as KSeFEnvironment);
 
-        // Calculate date range
-        const dateTo = new Date();
-        const dateFrom = new Date();
-        dateFrom.setDate(dateFrom.getDate() - daysBack);
-
-        // Fetch invoices from KSeF
-        const invoicesResponse = await client.fetchInvoices({
-            dateFrom,
-            dateTo,
-        });
-
-        if (!invoicesResponse) {
-            throw new Error('Failed to fetch invoices from KSeF');
-        }
-
-        // Check for rate limit but still process any invoices we got
-        const hitRateLimit = invoicesResponse.processingCode === 429;
-        const invoicesFound = invoicesResponse.numberOfElements;
+        // Variables for Sales Sync results
         let invoicesImported = 0;
-        let invoicesSkipped = 0;
+        let invoicesFound = 0;
+        let hitRateLimit = false;
 
-        // Sort invoices by date descending (newest first) since KSeF API doesn't support sorting
-        const sortedInvoices = [...invoicesResponse.invoiceHeaderList].sort((a, b) => {
-            const dateA = new Date(a.invoicingDate || a.acquisitionTimestamp || 0).getTime();
-            const dateB = new Date(b.invoicingDate || b.acquisitionTimestamp || 0).getTime();
-            return dateB - dateA; // Descending - newest first
-        });
+        // --- SALES INVOICES SYNC ---
+        if (shouldSyncSales) {
+            // Calculate date range
+            const dateTo = new Date();
+            const dateFrom = new Date();
+            dateFrom.setDate(dateFrom.getDate() - daysBack);
 
-        // Process each invoice - only SALES invoices (where we are the seller)
-        // Purchase invoices (where we are the buyer) are ignored
-        console.log('[Sync] Processing', sortedInvoices.length, 'invoices (rate limit:', hitRateLimit, ')');
-        console.log('[Sync] Settings NIP:', settings.ksef_nip);
+            // Fetch invoices from KSeF
+            const invoicesResponse = await client.fetchInvoices({
+                dateFrom,
+                dateTo,
+            });
 
-        for (const invoiceHeader of sortedInvoices) {
-            // Check if we've reached the max invoice limit
-            if (maxInvoices && invoicesImported >= maxInvoices) {
-                console.log('[Sync] Reached max invoice limit:', maxInvoices);
-                break;
+            if (!invoicesResponse) {
+                throw new Error('Failed to fetch invoices from KSeF');
             }
 
-            // Log full invoice structure for first invoice to understand format
-            if (invoicesImported + invoicesSkipped === 0) {
-                console.log('[Sync] FIRST INVOICE FULL STRUCTURE:');
-                console.log('[Sync]', JSON.stringify(invoiceHeader, null, 2));
-            }
+            // Check for rate limit but still process any invoices we got
+            hitRateLimit = invoicesResponse.processingCode === 429;
+            invoicesFound = invoicesResponse.numberOfElements;
+            let invoicesSkipped = 0;
 
-            // KSeF 2.0 API uses 'seller' and 'buyer' structure
-            // Old format: subjectBy.issuedByIdentifier.identifier
-            // New format: seller.nip
-            // Also check for nested structures
-            const inv = invoiceHeader as unknown as Record<string, unknown>;
-            const sellerNip = invoiceHeader.seller?.nip ||
-                invoiceHeader.subjectBy?.issuedByIdentifier?.identifier ||
-                invoiceHeader.sellerNip ||
-                (inv.seller as Record<string, unknown>)?.nip as string ||
-                (inv.subjectBy as Record<string, unknown>)?.issuedByIdentifier as string;
+            // Sort invoices by date descending (newest first)
+            const sortedInvoices = [...invoicesResponse.invoiceHeaderList].sort((a, b) => {
+                const dateA = new Date(a.invoicingDate || a.acquisitionTimestamp || 0).getTime();
+                const dateB = new Date(b.invoicingDate || b.acquisitionTimestamp || 0).getTime();
+                return dateB - dateA;
+            });
 
-            console.log('[Sync] Processing invoice:', invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber, 'seller:', sellerNip);
+            console.log('[Sync] Processing', sortedInvoices.length, 'sales invoices (rate limit:', hitRateLimit, ')');
 
-            // Filter: Only import invoices where OUR NIP is the seller (sales invoices)
-            if (sellerNip && sellerNip !== settings.ksef_nip) {
-                // This is a purchase invoice (we are the buyer), skip it
-                console.log('[Sync] Skipping - seller NIP mismatch:', sellerNip, 'vs', settings.ksef_nip);
-                invoicesSkipped++;
-                continue;
-            }
 
-            // KSeF 2.0 uses ksefNumber, 1.0 uses ksefReferenceNumber
-            const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';
+            for (const invoiceHeader of sortedInvoices) {
+                // Check if we've reached the max invoice limit
+                if (maxInvoices && invoicesImported >= maxInvoices) {
+                    console.log('[Sync] Reached max invoice limit:', maxInvoices);
+                    break;
+                }
 
-            // Check if invoice already exists
-            const { data: existingInvoice } = await supabase
-                .from('invoices')
-                .select('id')
-                .eq('ksef_number', ksefRef)
-                .single();
+                // Log full invoice structure for first invoice to understand format
+                if (invoicesImported + invoicesSkipped === 0) {
+                    console.log('[Sync] FIRST INVOICE FULL STRUCTURE:');
+                    console.log('[Sync]', JSON.stringify(invoiceHeader, null, 2));
+                }
 
-            if (existingInvoice) {
-                // Skip already imported invoices
-                console.log('[Sync] Skipping - already exists:', ksefRef);
-                continue;
-            }
+                // KSeF 2.0 API uses 'seller' and 'buyer' structure
+                // Old format: subjectBy.issuedByIdentifier.identifier
+                // New format: seller.nip
+                // Also check for nested structures
+                const inv = invoiceHeader as unknown as Record<string, unknown>;
+                const sellerNip = invoiceHeader.seller?.nip ||
+                    invoiceHeader.subjectBy?.issuedByIdentifier?.identifier ||
+                    invoiceHeader.sellerNip ||
+                    (inv.seller as Record<string, unknown>)?.nip as string ||
+                    (inv.subjectBy as Record<string, unknown>)?.issuedByIdentifier as string;
 
-            // Find or create debtor based on buyer NIP
-            // KSeF 2.0: buyer.identifier.value or buyer.nip
-            // KSeF 1.0: subjectTo.issuedToIdentifier.identifier
-            const buyerInvData = invoiceHeader as unknown as Record<string, unknown>;
-            const buyerData = buyerInvData.buyer as Record<string, unknown> | undefined;
-            const buyerIdentifier = buyerData?.identifier as Record<string, unknown> | undefined;
+                console.log('[Sync] Processing invoice:', invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber, 'seller:', sellerNip);
 
-            const buyerNip =
-                invoiceHeader.buyer?.nip ||
-                (buyerIdentifier?.value as string) ||
-                invoiceHeader.buyer?.identifier?.value ||
-                invoiceHeader.subjectTo?.issuedToIdentifier?.identifier;
+                // Filter: Only import invoices where OUR NIP is the seller (sales invoices)
+                if (sellerNip && sellerNip !== settings.ksef_nip) {
+                    // This is a purchase invoice (we are the buyer), skip it
+                    console.log('[Sync] Skipping - seller NIP mismatch:', sellerNip, 'vs', settings.ksef_nip);
+                    invoicesSkipped++;
+                    continue;
+                }
 
-            const buyerName = invoiceHeader.buyer?.name ||
-                (buyerData?.name as string) ||
-                invoiceHeader.subjectTo?.issuedToName?.fullName ||
-                invoiceHeader.subjectTo?.issuedToName?.tradeName ||
-                'Nieznany kontrahent';
+                // KSeF 2.0 uses ksefNumber, 1.0 uses ksefReferenceNumber
+                const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';
 
-            console.log('[Sync] Buyer NIP:', buyerNip, 'Name:', buyerName);
+                // Check if invoice already exists
+                const { data: existingInvoice } = await supabase
+                    .from('invoices')
+                    .select('id')
+                    .eq('ksef_number', ksefRef)
+                    .single();
 
-            let debtorId: string | null = null;
-            let sequenceId: string | null = null;
+                if (existingInvoice) {
+                    // Skip already imported invoices
+                    console.log('[Sync] Skipping - already exists:', ksefRef);
+                    continue;
+                }
 
-            // Get default sequence for new debtors - check user's sequences first, then system sequences
-            let defaultSequence = null;
+                // Find or create debtor based on buyer NIP
+                // KSeF 2.0: buyer.identifier.value or buyer.nip
+                // KSeF 1.0: subjectTo.issuedToIdentifier.identifier
+                const buyerInvData = invoiceHeader as unknown as Record<string, unknown>;
+                const buyerData = buyerInvData.buyer as Record<string, unknown> | undefined;
+                const buyerIdentifier = buyerData?.identifier as Record<string, unknown> | undefined;
 
-            // 1. Try user's default sequence
-            const { data: userDefaultSeq } = await supabase
-                .from('sequences')
-                .select('id, name')
-                .eq('user_id', user.id)
-                .eq('is_default', true)
-                .single();
+                const buyerNip =
+                    invoiceHeader.buyer?.nip ||
+                    (buyerIdentifier?.value as string) ||
+                    invoiceHeader.buyer?.identifier?.value ||
+                    invoiceHeader.subjectTo?.issuedToIdentifier?.identifier;
 
-            if (userDefaultSeq) {
-                defaultSequence = userDefaultSeq;
-                console.log('[Sync] Using user default sequence:', userDefaultSeq.name);
-            } else {
-                // 2. Try any user sequence
-                const { data: anyUserSeq } = await supabase
+                const buyerName = invoiceHeader.buyer?.name ||
+                    (buyerData?.name as string) ||
+                    invoiceHeader.subjectTo?.issuedToName?.fullName ||
+                    invoiceHeader.subjectTo?.issuedToName?.tradeName ||
+                    'Nieznany kontrahent';
+
+                console.log('[Sync] Buyer NIP:', buyerNip, 'Name:', buyerName);
+
+                let debtorId: string | null = null;
+                let sequenceId: string | null = null;
+
+                // Get default sequence for new debtors - check user's sequences first, then system sequences
+                let defaultSequence = null;
+
+                // 1. Try user's default sequence
+                const { data: userDefaultSeq } = await supabase
                     .from('sequences')
                     .select('id, name')
                     .eq('user_id', user.id)
-                    .limit(1)
+                    .eq('is_default', true)
                     .single();
 
-                if (anyUserSeq) {
-                    defaultSequence = anyUserSeq;
-                    console.log('[Sync] Using user sequence:', anyUserSeq.name);
+                if (userDefaultSeq) {
+                    defaultSequence = userDefaultSeq;
+                    console.log('[Sync] Using user default sequence:', userDefaultSeq.name);
                 } else {
-                    // 3. Try system default sequence (user_id is null, is_default = true)
-                    const { data: sysDefaultSeq } = await supabase
+                    // 2. Try any user sequence
+                    const { data: anyUserSeq } = await supabase
                         .from('sequences')
                         .select('id, name')
-                        .is('user_id', null)
-                        .eq('is_default', true)
+                        .eq('user_id', user.id)
+                        .limit(1)
                         .single();
 
-                    if (sysDefaultSeq) {
-                        defaultSequence = sysDefaultSeq;
-                        console.log('[Sync] Using system default sequence:', sysDefaultSeq.name);
+                    if (anyUserSeq) {
+                        defaultSequence = anyUserSeq;
+                        console.log('[Sync] Using user sequence:', anyUserSeq.name);
                     } else {
-                        // 4. Try any system sequence
-                        const { data: anySysSeq } = await supabase
+                        // 3. Try system default sequence (user_id is null, is_default = true)
+                        const { data: sysDefaultSeq } = await supabase
                             .from('sequences')
                             .select('id, name')
                             .is('user_id', null)
-                            .limit(1)
+                            .eq('is_default', true)
                             .single();
 
-                        if (anySysSeq) {
-                            defaultSequence = anySysSeq;
-                            console.log('[Sync] Using system sequence:', anySysSeq.name);
+                        if (sysDefaultSeq) {
+                            defaultSequence = sysDefaultSeq;
+                            console.log('[Sync] Using system default sequence:', sysDefaultSeq.name);
                         } else {
-                            console.log('[Sync] WARNING: No sequences found at all!');
+                            // 4. Try any system sequence
+                            const { data: anySysSeq } = await supabase
+                                .from('sequences')
+                                .select('id, name')
+                                .is('user_id', null)
+                                .limit(1)
+                                .single();
+
+                            if (anySysSeq) {
+                                defaultSequence = anySysSeq;
+                                console.log('[Sync] Using system sequence:', anySysSeq.name);
+                            } else {
+                                console.log('[Sync] WARNING: No sequences found at all!');
+                            }
                         }
                     }
                 }
-            }
 
-            if (buyerNip) {
-                const { data: existingDebtor } = await supabase
-                    .from('debtors')
-                    .select('id, sequence_id')
-                    .eq('nip', buyerNip)
-                    .eq('user_id', user.id)
-                    .single();
-
-                if (existingDebtor) {
-                    debtorId = existingDebtor.id;
-                    // Use debtor's sequence if set, otherwise use default
-                    sequenceId = existingDebtor.sequence_id || defaultSequence?.id || null;
-                    console.log('[Sync] Found existing debtor:', debtorId);
-                } else {
-                    // Create new debtor with default sequence
-                    // Try to get additional data from GUS API
-                    let gusData: { address?: string; city?: string; postal_code?: string; name?: string } = {};
-                    try {
-                        const gusResult = await lookupCompanyByNip(buyerNip);
-                        if (gusResult.success && gusResult.data) {
-                            gusData = {
-                                address: gusResult.data.address,
-                                city: gusResult.data.city,
-                                postal_code: gusResult.data.postal_code,
-                                name: gusResult.data.name,
-                            };
-                            console.log('[Sync] Got GUS data for debtor:', gusData.name);
-                        }
-                    } catch (gusError) {
-                        console.log('[Sync] Could not fetch GUS data:', gusError);
-                    }
-
-                    const { data: newDebtor, error: debtorError } = await supabase
+                if (buyerNip) {
+                    const { data: existingDebtor } = await supabase
                         .from('debtors')
-                        .insert({
-                            user_id: user.id,
-                            name: gusData.name || buyerName,
-                            nip: buyerNip,
-                            address: gusData.address || null,
-                            city: gusData.city || null,
-                            postal_code: gusData.postal_code || null,
-                            sequence_id: defaultSequence?.id || null,
-                        })
-                        .select('id')
+                        .select('id, sequence_id')
+                        .eq('nip', buyerNip)
+                        .eq('user_id', user.id)
                         .single();
 
-                    if (debtorError) {
-                        console.error('[Sync] Failed to create debtor:', buyerNip, debtorError.message);
+                    if (existingDebtor) {
+                        debtorId = existingDebtor.id;
+                        // Use debtor's sequence if set, otherwise use default
+                        sequenceId = existingDebtor.sequence_id || defaultSequence?.id || null;
+                        console.log('[Sync] Found existing debtor:', debtorId);
                     } else {
-                        debtorId = newDebtor?.id || null;
-                        console.log('[Sync] Created new debtor with GUS data:', debtorId);
+                        // Create new debtor with default sequence
+                        // Try to get additional data from GUS API
+                        let gusData: { address?: string; city?: string; postal_code?: string; name?: string } = {};
+                        try {
+                            const gusResult = await lookupCompanyByNip(buyerNip);
+                            if (gusResult.success && gusResult.data) {
+                                gusData = {
+                                    address: gusResult.data.address,
+                                    city: gusResult.data.city,
+                                    postal_code: gusResult.data.postal_code,
+                                    name: gusResult.data.name,
+                                };
+                                console.log('[Sync] Got GUS data for debtor:', gusData.name);
+                            }
+                        } catch (gusError) {
+                            console.log('[Sync] Could not fetch GUS data:', gusError);
+                        }
+
+                        const { data: newDebtor, error: debtorError } = await supabase
+                            .from('debtors')
+                            .insert({
+                                user_id: user.id,
+                                name: gusData.name || buyerName,
+                                nip: buyerNip,
+                                address: gusData.address || null,
+                                city: gusData.city || null,
+                                postal_code: gusData.postal_code || null,
+                                sequence_id: defaultSequence?.id || null,
+                            })
+                            .select('id')
+                            .single();
+
+                        if (debtorError) {
+                            console.error('[Sync] Failed to create debtor:', buyerNip, debtorError.message);
+                        } else {
+                            debtorId = newDebtor?.id || null;
+                            console.log('[Sync] Created new debtor with GUS data:', debtorId);
+                        }
+                        sequenceId = defaultSequence?.id || null;
                     }
+                } else {
+                    // No NIP - use default sequence
                     sequenceId = defaultSequence?.id || null;
                 }
-            } else {
-                // No NIP - use default sequence
-                sequenceId = defaultSequence?.id || null;
-            }
 
-            // Create invoice
-            // KSeF 2.0 API uses grossAmount, netAmount, vatAmount (camelCase numbers)
-            // Old format used gross, net, vat (strings)
-            const invData = invoiceHeader as unknown as Record<string, unknown>;
-            const grossAmount = Number(invData.grossAmount || invoiceHeader.gross || 0);
-            const netAmount = Number(invData.netAmount || invoiceHeader.net || 0);
-            const vatAmount = Number(invData.vatAmount || invoiceHeader.vat || 0);
+                // Create invoice
+                // KSeF 2.0 API uses grossAmount, netAmount, vatAmount (camelCase numbers)
+                // Old format used gross, net, vat (strings)
+                const invData = invoiceHeader as unknown as Record<string, unknown>;
+                const grossAmount = Number(invData.grossAmount || invoiceHeader.gross || 0);
+                const netAmount = Number(invData.netAmount || invoiceHeader.net || 0);
+                const vatAmount = Number(invData.vatAmount || invoiceHeader.vat || 0);
 
-            console.log('[Sync] Invoice amounts:', { grossAmount, netAmount, vatAmount });
+                console.log('[Sync] Invoice amounts:', { grossAmount, netAmount, vatAmount });
 
-            // Default due date is 14 days from invoice date
-            const invoiceDate = new Date(invoiceHeader.invoicingDate);
-            const dueDate = new Date(invoiceDate);
-            dueDate.setDate(dueDate.getDate() + 14);
+                // Default due date is 14 days from invoice date
+                const invoiceDate = new Date(invoiceHeader.invoicingDate);
+                const dueDate = new Date(invoiceDate);
+                dueDate.setDate(dueDate.getDate() + 14);
 
-            // Use ksefNumber (2.0) or ksefReferenceNumber (1.0)
-            const ksefNumber = invoiceHeader.ksefNumber || invoiceHeader.ksefReferenceNumber || ksefRef;
+                // Use ksefNumber (2.0) or ksefReferenceNumber (1.0)
+                const ksefNumber = invoiceHeader.ksefNumber || invoiceHeader.ksefReferenceNumber || ksefRef;
 
-            // Calculate status based on due date
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const dueDateClean = new Date(dueDate);
-            dueDateClean.setHours(0, 0, 0, 0);
+                // Calculate status based on due date
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const dueDateClean = new Date(dueDate);
+                dueDateClean.setHours(0, 0, 0, 0);
 
-            const daysUntilDue = Math.ceil((dueDateClean.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const daysUntilDue = Math.ceil((dueDateClean.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-            // Check for payment info in KSeF invoice data
-            // Look for "Informacja o płatności: Zapłacono" or similar
-            const paymentInfo = invData.paymentInfo || invData.paymentTerms || invData.payment || '';
-            const paymentDescription = String(invData.paymentDescription || invData.description || '');
-            const additionalInfo = String(invData.additionalInfo || invData.notes || '');
-            const rawDataString = JSON.stringify(invData).toLowerCase();
+                // Check for payment info in KSeF invoice data
+                // Look for "Informacja o płatności: Zapłacono" or similar
+                const paymentInfo = invData.paymentInfo || invData.paymentTerms || invData.payment || '';
+                const paymentDescription = String(invData.paymentDescription || invData.description || '');
+                const additionalInfo = String(invData.additionalInfo || invData.notes || '');
+                const rawDataString = JSON.stringify(invData).toLowerCase();
 
-            const isPaid =
-                rawDataString.includes('zapłacono') ||
-                rawDataString.includes('zaplacono') ||
-                rawDataString.includes('paid') ||
-                String(paymentInfo).toLowerCase().includes('zapłacono') ||
-                paymentDescription.toLowerCase().includes('zapłacono') ||
-                additionalInfo.toLowerCase().includes('zapłacono');
+                const isPaid =
+                    rawDataString.includes('zapłacono') ||
+                    rawDataString.includes('zaplacono') ||
+                    rawDataString.includes('paid') ||
+                    String(paymentInfo).toLowerCase().includes('zapłacono') ||
+                    paymentDescription.toLowerCase().includes('zapłacono') ||
+                    additionalInfo.toLowerCase().includes('zapłacono');
 
-            let invoiceStatus: string;
-            if (isPaid) {
-                invoiceStatus = 'paid';  // Zapłacona (wykryte z KSeF)
-                console.log('[Sync] Invoice marked as PAID based on KSeF payment info');
-            } else if (daysUntilDue < 0) {
-                invoiceStatus = 'overdue';  // Przeterminowana
-            } else if (daysUntilDue <= 7) {
-                invoiceStatus = 'due_soon';  // Bliski termin
-            } else {
-                invoiceStatus = 'pending';  // Oczekująca
-            }
+                let invoiceStatus: string;
+                if (isPaid) {
+                    invoiceStatus = 'paid';  // Zapłacona (wykryte z KSeF)
+                    console.log('[Sync] Invoice marked as PAID based on KSeF payment info');
+                } else if (daysUntilDue < 0) {
+                    invoiceStatus = 'overdue';  // Przeterminowana
+                } else if (daysUntilDue <= 7) {
+                    invoiceStatus = 'due_soon';  // Bliski termin
+                } else {
+                    invoiceStatus = 'pending';  // Oczekująca
+                }
 
-            console.log('[Sync] Invoice status:', invoiceStatus, 'days until due:', daysUntilDue);
-            console.log('[Sync] Assigning sequence_id:', sequenceId, 'to invoice for debtor:', debtorId);
+                console.log('[Sync] Invoice status:', invoiceStatus, 'days until due:', daysUntilDue);
+                console.log('[Sync] Assigning sequence_id:', sequenceId, 'to invoice for debtor:', debtorId);
 
-            const { data: newInvoice, error: invoiceError } = await supabase
-                .from('invoices')
-                .insert({
-                    user_id: user.id,
-                    debtor_id: debtorId,
-                    sequence_id: sequenceId,  // Assigned sequence from debtor or default
-                    invoice_number: invoiceHeader.invoiceNumber,
-                    amount: grossAmount,
-                    amount_net: netAmount,
-                    amount_gross: grossAmount,
-                    vat_amount: vatAmount,
-                    issue_date: invoiceHeader.invoicingDate,
-                    due_date: dueDate.toISOString().split('T')[0],
-                    status: invoiceStatus,  // Dynamic based on due date
-                    ksef_number: ksefNumber,
-                    ksef_status: settings.auto_confirm_invoices ? 'confirmed' : 'pending_confirmation',
-                    imported_from_ksef: true,
-                    ksef_import_date: new Date().toISOString(),
-                    ksef_raw_data: invoiceHeader,
-                })
-                .select('id')
-                .single();
+                const { data: newInvoice, error: invoiceError } = await supabase
+                    .from('invoices')
+                    .insert({
+                        user_id: user.id,
+                        debtor_id: debtorId,
+                        sequence_id: sequenceId,  // Assigned sequence from debtor or default
+                        invoice_number: invoiceHeader.invoiceNumber,
+                        amount: grossAmount,
+                        amount_net: netAmount,
+                        amount_gross: grossAmount,
+                        vat_amount: vatAmount,
+                        issue_date: invoiceHeader.invoicingDate,
+                        due_date: dueDate.toISOString().split('T')[0],
+                        status: invoiceStatus,  // Dynamic based on due date
+                        ksef_number: ksefNumber,
+                        ksef_status: settings.auto_confirm_invoices ? 'confirmed' : 'pending_confirmation',
+                        imported_from_ksef: true,
+                        ksef_import_date: new Date().toISOString(),
+                        ksef_raw_data: invoiceHeader,
+                    })
+                    .select('id')
+                    .single();
 
-            if (invoiceError) {
-                console.error('[Sync] Failed to insert invoice:', ksefNumber, invoiceError.message);
-            } else if (newInvoice) {
-                console.log('[Sync] Inserted invoice:', ksefNumber);
-                invoicesImported++;
+                if (invoiceError) {
+                    console.error('[Sync] Failed to insert invoice:', ksefNumber, invoiceError.message);
+                } else if (newInvoice) {
+                    console.log('[Sync] Inserted invoice:', ksefNumber);
+                    invoicesImported++;
 
-                // NEW: Fetch and parse XML to get invoice items
-                try {
-                    const xmlContent = await client.getInvoiceXml(ksefNumber);
-                    if (xmlContent) {
-                        const { items } = parseKSeFXml(xmlContent);
-                        if (items.length > 0) {
-                            console.log(`[Sync] Found ${items.length} items for invoice ${ksefNumber}`);
-                            const itemsToInsert = items.map(item => ({
-                                invoice_id: newInvoice.id,
-                                description: item.description,
-                                quantity: item.quantity,
-                                unit_price_net: item.unitPriceNet,
-                                unit_price_gross: item.unitPriceGross,
-                                vat_rate: item.vatRate,
-                                total_net: item.totalNet,
-                                total_gross: item.totalGross,
-                                unit: item.unit
-                            }));
+                    // NEW: Fetch and parse XML to get invoice items
+                    try {
+                        const xmlContent = await client.getInvoiceXml(ksefNumber);
+                        if (xmlContent) {
+                            const { items } = parseKSeFXml(xmlContent);
+                            if (items.length > 0) {
+                                console.log(`[Sync] Found ${items.length} items for invoice ${ksefNumber}`);
+                                const itemsToInsert = items.map(item => ({
+                                    invoice_id: newInvoice.id,
+                                    description: item.description,
+                                    quantity: item.quantity,
+                                    unit_price_net: item.unitPriceNet,
+                                    unit_price_gross: item.unitPriceGross,
+                                    vat_rate: item.vatRate,
+                                    total_net: item.totalNet,
+                                    total_gross: item.totalGross,
+                                    unit: item.unit
+                                }));
 
-                            await supabase.from('invoice_items').insert(itemsToInsert);
+                                await supabase.from('invoice_items').insert(itemsToInsert);
+                            }
+                        }
+                    } catch (xmlError) {
+                        console.error(`[Sync] Failed to fetch/parse XML for ${ksefNumber}:`, xmlError);
+                    }
+
+                    // Generate scheduled steps if invoice has a sequence assigned
+                    if (sequenceId) {
+                        const dueDateStr = dueDate.toISOString().split('T')[0];
+                        const scheduleResult = await generateScheduledSteps(newInvoice.id, sequenceId, dueDateStr);
+                        if (scheduleResult.error) {
+                            console.error('[Sync] Failed to generate scheduled steps:', scheduleResult.error);
+                        } else {
+                            console.log('[Sync] Generated', scheduleResult.count, 'scheduled steps for invoice');
                         }
                     }
-                } catch (xmlError) {
-                    console.error(`[Sync] Failed to fetch/parse XML for ${ksefNumber}:`, xmlError);
-                }
-
-                // Generate scheduled steps if invoice has a sequence assigned
-                if (sequenceId) {
-                    const dueDateStr = dueDate.toISOString().split('T')[0];
-                    const scheduleResult = await generateScheduledSteps(newInvoice.id, sequenceId, dueDateStr);
-                    if (scheduleResult.error) {
-                        console.error('[Sync] Failed to generate scheduled steps:', scheduleResult.error);
-                    } else {
-                        console.log('[Sync] Generated', scheduleResult.count, 'scheduled steps for invoice');
-                    }
                 }
             }
+
+        } else {
+            console.log('[Sync] Sales sync skipped.');
         }
 
         // Update sync status
@@ -721,31 +759,40 @@ export async function syncKSeFInvoices(daysBack: number = 7, maxInvoices?: numbe
         });
 
         // Sync Cost Invoices (Purchase invoices)
-        // We do this AFTER sales invoices, but in the same "Sync" action from UI perspective
+        // We do this AFTER sales invoices
         let costInvoicesImported = 0;
         let costInvoicesError = '';
 
-        try {
-            console.log('[Sync] Starting Cost Invoices sync...');
-            const costResult = await syncKSeFCostInvoices(daysBack, maxInvoices);
-            if (costResult.success) {
-                costInvoicesImported = costResult.invoicesImported || 0;
-                console.log('[Sync] Cost Invoices synced:', costInvoicesImported);
-            } else {
-                console.error('[Sync] Cost Invoices sync failed:', costResult.error);
-                costInvoicesError = costResult.error || 'Unknown cost sync error';
+        if (shouldSyncCosts) {
+            try {
+                console.log('[Sync] Starting Cost Invoices sync...');
+                // Note: syncKSeFCostInvoices handles its own implementation details, 
+                // but we might want to pass syncMode logic down if it becomes complex.
+                // For now, simple call is enough as we guarded it with shouldSyncCosts.
+                const costResult = await syncKSeFCostInvoices(daysBack, maxInvoices);
+                if (costResult.success) {
+                    costInvoicesImported = costResult.invoicesImported || 0;
+                    console.log('[Sync] Cost Invoices synced:', costInvoicesImported);
+                } else {
+                    console.error('[Sync] Cost Invoices sync failed:', costResult.error);
+                    costInvoicesError = costResult.error || 'Unknown cost sync error';
+                }
+            } catch (costErr) {
+                console.error('[Sync] Cost Invoices sync exception:', costErr);
+                costInvoicesError = 'Exception during cost sync';
             }
-        } catch (costErr) {
-            console.error('[Sync] Cost Invoices sync exception:', costErr);
-            costInvoicesError = 'Exception during cost sync';
+        } else {
+            console.log('[Sync] Costs sync skipped.');
         }
 
         const totalImported = invoicesImported + costInvoicesImported;
 
         return {
             success: (!hitRateLimit || invoicesImported > 0) || costInvoicesImported > 0,
-            invoicesFound, // technically only sales found count here
-            invoicesImported: totalImported, // Combined count
+            invoicesFound,
+            invoicesImported: totalImported,
+            salesImported: invoicesImported,
+            costsImported: costInvoicesImported,
             error: hitRateLimit && invoicesImported === 0 && costInvoicesImported === 0
                 ? 'Przekroczono limit zapytań do KSeF (max 20/godz.). Spróbuj ponownie za ok. godzinę.'
                 : (costInvoicesError ? `Sprzedaż OK, ale błąd kosztów: ${costInvoicesError}` : undefined),
