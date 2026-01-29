@@ -82,159 +82,200 @@ export async function GET(request: NextRequest) {
             const dateFrom = new Date();
             dateFrom.setDate(dateFrom.getDate() - 1);
 
-            const invoicesResponse = await client.fetchInvoices({ dateFrom, dateTo });
-
-            if (!invoicesResponse) {
-                throw new Error('Failed to fetch invoices from KSeF');
-            }
-
+            // Fetch Sales (Subject1)
             let invoicesImported = 0;
+            let costsImported = 0;
             let debtorsCreated = 0;
 
-            // Get default sequence for this user
-            let defaultSequence = null;
-            const { data: userDefaultSeq } = await supabase
-                .from('sequences')
-                .select('id, name')
-                .eq('user_id', settings.user_id)
-                .eq('is_default', true)
-                .single();
+            const salesResponse = await client.fetchInvoices({ dateFrom, dateTo, subjectType: 'Subject1' });
+            const costResponse = await client.fetchInvoices({ dateFrom, dateTo, subjectType: 'Subject2' });
 
-            if (userDefaultSeq) {
-                defaultSequence = userDefaultSeq;
-            } else {
-                const { data: sysDefaultSeq } = await supabase
+            // ----------------------------------------------------
+            // PROCESS SALES INVOICES (Subject1)
+            // ----------------------------------------------------
+            if (salesResponse?.invoiceHeaderList) {
+                // Get default sequence for this user
+                let defaultSequence = null;
+                const { data: userDefaultSeq } = await supabase
                     .from('sequences')
                     .select('id, name')
-                    .is('user_id', null)
+                    .eq('user_id', settings.user_id)
                     .eq('is_default', true)
                     .single();
-                defaultSequence = sysDefaultSeq;
-            }
 
-            // Process each invoice
-            for (const invoiceHeader of invoicesResponse.invoiceHeaderList) {
-                const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';
-
-                // Check if already exists
-                const { data: existing } = await supabase
-                    .from('invoices')
-                    .select('id')
-                    .eq('ksef_number', ksefRef)
-                    .single();
-
-                if (existing) {
-                    continue;
+                if (userDefaultSeq) {
+                    defaultSequence = userDefaultSeq;
+                } else {
+                    const { data: sysDefaultSeq } = await supabase
+                        .from('sequences')
+                        .select('id, name')
+                        .is('user_id', null)
+                        .eq('is_default', true)
+                        .single();
+                    defaultSequence = sysDefaultSeq;
                 }
 
-                // Check if we are the seller (only import sales invoices)
-                const inv = invoiceHeader as unknown as Record<string, unknown>;
-                const sellerNip = invoiceHeader.seller?.nip ||
-                    (inv.seller as Record<string, unknown>)?.nip as string;
+                for (const invoiceHeader of salesResponse.invoiceHeaderList) {
+                    const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';
 
-                if (sellerNip && sellerNip !== settings.ksef_nip) {
-                    continue; // Skip purchase invoices
-                }
-
-                // Get buyer info
-                const buyerData = inv.buyer as Record<string, unknown> | undefined;
-                const buyerIdentifier = buyerData?.identifier as Record<string, unknown> | undefined;
-                const buyerNip = invoiceHeader.buyer?.nip || (buyerIdentifier?.value as string);
-                const buyerName = invoiceHeader.buyer?.name || (buyerData?.name as string) || 'Nieznany kontrahent';
-
-                // Find or create debtor
-                let debtorId: string | null = null;
-                let sequenceId = defaultSequence?.id || null;
-
-                if (buyerNip) {
-                    const { data: existingDebtor } = await supabase
-                        .from('debtors')
-                        .select('id, sequence_id')
-                        .eq('nip', buyerNip)
-                        .eq('user_id', settings.user_id)
+                    // Check if already exists in SALES table
+                    const { data: existing } = await supabase
+                        .from('invoices')
+                        .select('id')
+                        .eq('ksef_number', ksefRef)
                         .single();
 
-                    if (existingDebtor) {
-                        debtorId = existingDebtor.id;
-                        sequenceId = existingDebtor.sequence_id || sequenceId;
-                    } else {
-                        const { data: newDebtor } = await supabase
+                    if (existing) continue;
+
+                    // Ensure we are the seller
+                    const inv = invoiceHeader as unknown as Record<string, unknown>;
+                    const sellerNip = invoiceHeader.seller?.nip || (inv.seller as any)?.nip as string;
+                    if (sellerNip && sellerNip !== settings.ksef_nip) continue;
+
+                    // Get buyer info
+                    const buyerData = inv.buyer as Record<string, unknown> | undefined;
+                    const buyerIdentifier = buyerData?.identifier as Record<string, unknown> | undefined;
+                    const buyerNip = invoiceHeader.buyer?.nip || (buyerIdentifier?.value as string);
+                    const buyerName = invoiceHeader.buyer?.name || (buyerData?.name as string) || 'Nieznany kontrahent';
+
+                    // Find or create debtor
+                    let debtorId: string | null = null;
+                    let sequenceId = defaultSequence?.id || null;
+
+                    if (buyerNip) {
+                        const { data: existingDebtor } = await supabase
                             .from('debtors')
-                            .insert({
-                                user_id: settings.user_id,
-                                name: buyerName,
-                                nip: buyerNip,
-                                sequence_id: sequenceId,
-                            })
-                            .select('id')
+                            .select('id, sequence_id')
+                            .eq('nip', buyerNip)
+                            .eq('user_id', settings.user_id)
                             .single();
-                        debtorId = newDebtor?.id || null;
-                        if (newDebtor) {
-                            debtorsCreated++;
+
+                        if (existingDebtor) {
+                            debtorId = existingDebtor.id;
+                            sequenceId = existingDebtor.sequence_id || sequenceId;
+                        } else {
+                            const { data: newDebtor } = await supabase
+                                .from('debtors')
+                                .insert({
+                                    user_id: settings.user_id,
+                                    name: buyerName,
+                                    nip: buyerNip,
+                                    sequence_id: sequenceId,
+                                })
+                                .select('id')
+                                .single();
+                            debtorId = newDebtor?.id || null;
+                            if (newDebtor) debtorsCreated++;
+                        }
+                    }
+
+                    // Amounts and dates
+                    const grossAmount = Number(inv.grossAmount || 0);
+                    const netAmount = Number(inv.netAmount || 0);
+                    const vatAmount = Number(inv.vatAmount || 0);
+                    const invoiceDate = new Date(invoiceHeader.invoicingDate);
+                    const dueDate = new Date(invoiceDate);
+                    dueDate.setDate(dueDate.getDate() + 14);
+
+                    // Calc status
+                    const todayDate = new Date();
+                    todayDate.setHours(0, 0, 0, 0);
+                    const dueDateClean = new Date(dueDate);
+                    dueDateClean.setHours(0, 0, 0, 0);
+                    const daysUntilDue = Math.ceil((dueDateClean.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const invoiceStatus = daysUntilDue < 0 ? 'overdue' : (daysUntilDue <= 7 ? 'due_soon' : 'pending');
+
+                    const { data: newInvoice, error: invoiceError } = await supabase
+                        .from('invoices')
+                        .insert({
+                            user_id: settings.user_id,
+                            debtor_id: debtorId,
+                            sequence_id: sequenceId,
+                            invoice_number: invoiceHeader.invoiceNumber,
+                            amount: grossAmount,
+                            amount_net: netAmount,
+                            amount_gross: grossAmount,
+                            vat_amount: vatAmount,
+                            issue_date: invoiceHeader.invoicingDate,
+                            due_date: dueDate.toISOString().split('T')[0],
+                            status: invoiceStatus,
+                            ksef_number: ksefRef,
+                            ksef_status: settings.auto_confirm_invoices ? 'confirmed' : 'pending_confirmation',
+                            imported_from_ksef: true,
+                            ksef_import_date: new Date().toISOString(),
+                            ksef_raw_data: invoiceHeader,
+                        })
+                        .select('id')
+                        .single();
+
+                    if (invoiceError) {
+                        console.error('[KSeF Cron] Failed to insert invoice:', ksefRef, invoiceError.message);
+                    } else if (newInvoice) {
+                        invoicesImported++;
+                        if (sequenceId) {
+                            const dueDateStr = dueDate.toISOString().split('T')[0];
+                            await generateScheduledSteps(newInvoice.id, sequenceId, dueDateStr);
                         }
                     }
                 }
+            }
 
-                // Get amounts
-                const grossAmount = Number(inv.grossAmount || 0);
-                const netAmount = Number(inv.netAmount || 0);
-                const vatAmount = Number(inv.vatAmount || 0);
+            // ----------------------------------------------------
+            // PROCESS COST INVOICES (Subject2)
+            // ----------------------------------------------------
+            if (costResponse?.invoiceHeaderList) {
+                for (const invoiceHeader of costResponse.invoiceHeaderList) {
+                    const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';
 
-                // Calculate dates
-                const invoiceDate = new Date(invoiceHeader.invoicingDate);
-                const dueDate = new Date(invoiceDate);
-                dueDate.setDate(dueDate.getDate() + 14);
+                    // Check if already exists in COST table
+                    const { data: existing } = await supabase
+                        .from('cost_invoices')
+                        .select('id')
+                        .eq('ksef_number', ksefRef)
+                        .single();
 
-                // Calculate status based on due date
-                const todayDate = new Date();
-                todayDate.setHours(0, 0, 0, 0);
-                const dueDateClean = new Date(dueDate);
-                dueDateClean.setHours(0, 0, 0, 0);
-                const daysUntilDue = Math.ceil((dueDateClean.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24));
+                    if (existing) continue;
 
-                let invoiceStatus: string;
-                if (daysUntilDue < 0) {
-                    invoiceStatus = 'overdue';
-                } else if (daysUntilDue <= 7) {
-                    invoiceStatus = 'due_soon';
-                } else {
-                    invoiceStatus = 'pending';
-                }
+                    const inv = invoiceHeader as unknown as Record<string, unknown>;
+                    // In costs, Seller is the Contractor
+                    const sellerData = inv.seller as Record<string, unknown> | undefined;
+                    const sellerIdentifier = sellerData?.identifier as Record<string, unknown> | undefined;
+                    const sellerNip = invoiceHeader.seller?.nip || (sellerIdentifier?.value as string);
+                    const sellerName = invoiceHeader.seller?.name || (sellerData?.name as string) || 'Nieznany sprzedawca';
 
-                // Insert invoice
-                const { data: newInvoice, error: invoiceError } = await supabase
-                    .from('invoices')
-                    .insert({
-                        user_id: settings.user_id,
-                        debtor_id: debtorId,
-                        sequence_id: sequenceId,
-                        invoice_number: invoiceHeader.invoiceNumber,
-                        amount: grossAmount,
-                        amount_net: netAmount,
-                        amount_gross: grossAmount,
-                        vat_amount: vatAmount,
-                        issue_date: invoiceHeader.invoicingDate,
-                        due_date: dueDate.toISOString().split('T')[0],
-                        status: invoiceStatus,
-                        ksef_number: ksefRef,
-                        ksef_status: settings.auto_confirm_invoices ? 'confirmed' : 'pending_confirmation',
-                        imported_from_ksef: true,
-                        ksef_import_date: new Date().toISOString(),
-                        ksef_raw_data: invoiceHeader,
-                    })
-                    .select('id')
-                    .single();
+                    const grossAmount = Number(inv.grossAmount || 0);
+                    const netAmount = Number(inv.netAmount || 0);
+                    const vatAmount = Number(inv.vatAmount || 0);
+                    const invoiceDate = new Date(invoiceHeader.invoicingDate);
+                    const dueDate = new Date(invoiceDate);
+                    dueDate.setDate(dueDate.getDate() + 14); // Default 14 days assumption
 
-                if (invoiceError) {
-                    console.error('[KSeF Cron] Failed to insert invoice:', ksefRef, invoiceError.message);
-                } else if (newInvoice) {
-                    console.log('[KSeF Cron] Inserted invoice:', ksefRef);
-                    invoicesImported++;
+                    // Insert cost invoice
+                    const { error: costError, data: newCost } = await supabase
+                        .from('cost_invoices')
+                        .insert({
+                            user_id: settings.user_id,
+                            contractor_name: sellerName,
+                            contractor_nip: sellerNip,
+                            invoice_number: invoiceHeader.invoiceNumber,
+                            amount: grossAmount,
+                            amount_net: netAmount,
+                            amount_vat: vatAmount,
+                            currency: 'PLN', // KSeF default usually
+                            issue_date: invoiceHeader.invoicingDate,
+                            due_date: dueDate.toISOString().split('T')[0],
+                            payment_status: 'pending', // Default
+                            imported_from_ksef: true,
+                            ksef_number: ksefRef,
+                            description: 'Zaimportowano automatycznie z KSeF',
+                        })
+                        .select('id')
+                        .single();
 
-                    // Generate scheduled steps if sequence assigned
-                    if (sequenceId) {
-                        const dueDateStr = dueDate.toISOString().split('T')[0];
-                        await generateScheduledSteps(newInvoice.id, sequenceId, dueDateStr);
+                    if (costError) {
+                        console.error('[KSeF Cron] Failed to insert COST invoice:', ksefRef, costError.message);
+                    } else if (newCost) {
+                        costsImported++;
                     }
                 }
             }
@@ -258,6 +299,9 @@ export async function GET(request: NextRequest) {
                     debtorsCreated > 1 && debtorsCreated < 5 ? 'kontrahentów' : 'kontrahentów';
 
                 let message = `Zaimportowano ${invoicesImported} ${invoiceText}`;
+                if (costsImported > 0) {
+                    message += `, ${costsImported} faktur kosztowych`;
+                }
                 if (debtorsCreated > 0) {
                     message += `, utworzono ${debtorsCreated} nowych ${debtorText}`;
                 }
@@ -272,8 +316,8 @@ export async function GET(request: NextRequest) {
             }
 
             results.usersSynced++;
-            results.invoicesTotal += invoicesImported;
-            console.log(`[KSeF Cron] User ${settings.user_id}: imported ${invoicesImported} invoices, ${debtorsCreated} new debtors`);
+            results.invoicesTotal += (invoicesImported + costsImported);
+            console.log(`[KSeF Cron] User ${settings.user_id}: imported ${invoicesImported} sales, ${costsImported} costs, ${debtorsCreated} new debtors`);
 
         } catch (err) {
             console.error(`[KSeF Cron] Error for user ${settings.user_id}:`, err);
