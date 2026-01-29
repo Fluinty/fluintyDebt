@@ -134,23 +134,27 @@ export default async function DashboardPage() {
         .slice(0, 5);
 
     // Prepare data for UpcomingWeek
-    const upcomingSalesInvoices = showSales ? invoicesList.map(inv => ({
-        id: inv.id,
-        invoice_number: inv.invoice_number,
-        amount: inv.amount,
-        amount_gross: inv.amount_gross,
-        due_date: inv.due_date,
-        clientName: (inv.debtors as any)?.name || 'Nieznany klient',
-    })) : [];
+    const upcomingSalesInvoices = showSales ? invoicesList
+        .filter(inv => inv.calculatedStatus !== 'paid')
+        .map(inv => ({
+            id: inv.id,
+            invoice_number: inv.invoice_number,
+            amount: inv.amount,
+            amount_gross: inv.amount_gross,
+            due_date: inv.due_date,
+            clientName: (inv.debtors as any)?.name || 'Nieznany klient',
+        })) : [];
 
-    const upcomingCostInvoices = showCosts ? costInvoicesList.map(inv => ({
-        id: inv.id,
-        invoice_number: inv.invoice_number,
-        amount: inv.amount,
-        amount_gross: inv.amount_gross,
-        due_date: inv.due_date,
-        clientName: inv.contractor_name,
-    })) : [];
+    const upcomingCostInvoices = showCosts ? costInvoicesList
+        .filter(inv => inv.payment_status !== 'paid')
+        .map(inv => ({
+            id: inv.id,
+            invoice_number: inv.invoice_number,
+            amount: inv.amount,
+            amount_gross: inv.amount_gross,
+            due_date: inv.due_date,
+            clientName: inv.contractor_name,
+        })) : [];
 
     // ADVANCED ANALYTICS: RUNWAY & PROFIT MARGIN
     const currentBalance = Number(profile?.current_balance || 0);

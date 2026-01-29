@@ -1,4 +1,5 @@
 'use server';
+export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
@@ -55,11 +56,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Filter users who haven't synced today
-    const usersNeedingSync = (usersToSync || []).filter(user => {
-        if (!user.last_sync_at) return true;
-        const lastSyncDate = user.last_sync_at.split('T')[0];
-        return lastSyncDate !== today;
-    });
+    // Filter users who haven't synced today - DISABLED TO ALLOW RE-SYNC
+    const usersNeedingSync = (usersToSync || []); // .filter(...) disabled
 
     console.log(`[KSeF Cron] Found ${usersNeedingSync.length} users needing sync`);
 
