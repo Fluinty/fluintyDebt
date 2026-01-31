@@ -54,6 +54,22 @@ export async function executeScheduledStep(stepId: string) {
         return { error: `Krok ma status "${step.status}" - można wykonać tylko kroki oczekujące, pominięte lub nieudane` };
     }
 
+    // Check channel and route to appropriate handler
+    const channel = (step.sequence_steps as any)?.channel;
+
+    if (channel === 'sms') {
+        // Dynamic import to avoid circular dependencies
+        const { executeSMSStep } = await import('./sms-actions');
+        return executeSMSStep(stepId);
+    }
+
+    if (channel === 'voice') {
+        const { executeVoiceStep } = await import('./sms-actions');
+        return executeVoiceStep(stepId);
+    }
+
+    // Continue with email logic (default)
+
     const invoice = step.invoices as any;
     const sequenceStep = step.sequence_steps as any;
     const debtor = invoice?.debtors;

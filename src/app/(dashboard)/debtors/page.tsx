@@ -108,12 +108,7 @@ export default async function DebtorsPage() {
                     </p>
                 </div>
                 <div className="flex gap-2">
-                    <Link href="/debtors/import">
-                        <Button variant="outline">
-                            <FileDown className="h-4 w-4 mr-2" />
-                            Import
-                        </Button>
-                    </Link>
+
                     <Link href="/debtors/new">
                         <Button>
                             <Plus className="h-4 w-4 mr-2" />

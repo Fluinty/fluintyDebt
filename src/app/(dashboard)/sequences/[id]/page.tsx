@@ -29,13 +29,16 @@ interface SequenceStep {
     id: string;
     step_order: number;
     days_offset: number;
-    channel: 'email';
+    channel: 'email' | 'sms' | 'voice';
     email_subject: string | null;
     email_body: string | null;
     email_subject_en: string | null;
     email_body_en: string | null;
+    sms_body: string | null;
+    voice_script: string | null;
     include_payment_link: boolean;
     include_interest: boolean;
+    attach_invoice?: boolean;
     sequence_id?: string;
 }
 
@@ -141,18 +144,22 @@ export default function SequenceEditorPage() {
                     sequence_id: sequence.id,
                     step_order: index + 1,
                     days_offset: step.days_offset,
-                    channel: 'email',
+                    channel: step.channel,
                     email_subject: step.email_subject,
                     email_body: step.email_body,
                     email_subject_en: step.email_subject_en,
                     email_body_en: step.email_body_en,
+                    sms_body: step.sms_body,
+                    voice_script: step.voice_script,
                     include_payment_link: step.include_payment_link,
-                    include_interest: step.include_interest
+                    include_interest: step.include_interest,
+                    attach_invoice: step.attach_invoice || false
                 };
 
                 // Remove temp ID for new items so DB generates real UUID
+                // UPDATE: Upsert requires ID for all items if mixed. We generate UUID client-side.
                 if (step.id.startsWith('new-')) {
-                    return stepData;
+                    return { ...stepData, id: crypto.randomUUID() };
                 }
                 return { ...stepData, id: step.id };
             });
@@ -199,8 +206,11 @@ export default function SequenceEditorPage() {
             email_body: '',
             email_subject_en: '',
             email_body_en: '',
+            sms_body: '',
+            voice_script: '',
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: false,
         };
         const updatedSteps = [...sequence.steps, newStep];
         setSequence({ ...sequence, steps: updatedSteps });
@@ -299,14 +309,23 @@ export default function SequenceEditorPage() {
                                 <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                                 <div className="flex-1 min-w-0">
                                     <p className="font-medium text-sm truncate">
-                                        {step.step_order}. {step.email_subject || step.email_subject_en || '(Bez tytułu)'}
+                                        {step.step_order}. {
+                                            step.channel === 'email'
+                                                ? (step.email_subject || step.email_subject_en || '(Bez tytułu)')
+                                                : step.channel === 'sms'
+                                                    ? (step.sms_body?.substring(0, 30) || '(Brak treści SMS)')
+                                                    : (step.voice_script?.substring(0, 30) || '(Brak skryptu)')
+                                        }
                                     </p>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                             {formatDaysOffset(step.days_offset)}
                                         </Badge>
-                                        <span className="text-xs text-muted-foreground uppercase">
-                                            Email
+                                        <span className={`text-xs uppercase ${step.channel === 'email' ? 'text-blue-500' :
+                                            step.channel === 'sms' ? 'text-green-500' : 'text-purple-500'
+                                            }`}>
+                                            {step.channel === 'email' ? '📧 Email' :
+                                                step.channel === 'sms' ? '📲 SMS' : '📞 Telefon'}
                                         </span>
                                     </div>
                                 </div>
@@ -347,7 +366,23 @@ export default function SequenceEditorPage() {
                     <CardContent className="space-y-6">
                         {selectedStep ? (
                             <>
-                                <div className="grid grid-cols-1 gap-4 border-b pb-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-b pb-6">
+                                    <div className="space-y-2">
+                                        <Label>Kanał</Label>
+                                        <Select
+                                            value={selectedStep.channel}
+                                            onValueChange={(v: 'email' | 'sms' | 'voice') => updateStep({ channel: v })}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="email">📧 Email</SelectItem>
+                                                <SelectItem value="sms">📲 SMS</SelectItem>
+                                                <SelectItem value="voice" disabled>📞 Połączenie głosowe (Wkrótce)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                     <div className="space-y-2">
                                         <Label>Dzień wysyłki</Label>
                                         <Input
@@ -361,82 +396,150 @@ export default function SequenceEditorPage() {
                                     </div>
                                 </div>
 
-
-                                <Tabs value={activeTab} className="w-full">
-                                    <TabsContent value="pl" className="space-y-4 mt-0">
+                                {/* SMS Content */}
+                                {selectedStep.channel === 'sms' && (
+                                    <div className="space-y-4">
                                         <div className="space-y-2">
-                                            <Label>Temat emaila (PL)</Label>
-                                            <Input
-                                                value={selectedStep.email_subject || ''}
-                                                onChange={(e) => updateStep({ email_subject: e.target.value })}
-                                                placeholder="np. Przypomnienie o płatności"
-                                            />
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label>Treść emaila (PL)</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label>Treść SMS</Label>
+                                                <span className={`text-xs ${(selectedStep.sms_body?.length || 0) > 160 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                                                    {selectedStep.sms_body?.length || 0}/160 znaków
+                                                </span>
+                                            </div>
                                             <Textarea
-                                                value={selectedStep.email_body || ''}
-                                                onChange={(e) => updateStep({ email_body: e.target.value })}
-                                                rows={10}
-                                                className="font-mono text-sm"
+                                                value={selectedStep.sms_body || ''}
+                                                onChange={(e) => updateStep({ sms_body: e.target.value })}
+                                                rows={4}
+                                                placeholder="Treść wiadomości SMS..."
                                             />
+                                            {(selectedStep.sms_body?.length || 0) > 160 && (
+                                                <p className="text-xs text-yellow-500">
+                                                    ⚠️ SMS dłuższy niż 160 znaków zostanie podzielony na kilka wiadomości
+                                                </p>
+                                            )}
                                         </div>
-
-
-                                    </TabsContent>
-
-                                    <TabsContent value="en" className="space-y-4 mt-0">
-                                        <div className="space-y-2">
-                                            <Label>Temat emaila (EN)</Label>
-                                            <Input
-                                                value={selectedStep.email_subject_en || ''}
-                                                onChange={(e) => updateStep({ email_subject_en: e.target.value })}
-                                                placeholder="e.g. Payment Reminder"
-                                            />
+                                        <div className="bg-muted/50 p-4 rounded-lg">
+                                            <p className="text-sm font-medium mb-2">Dostępne zmienne:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{company_name}}'].map((ph) => (
+                                                    <Badge key={ph} variant="secondary" className="font-mono text-xs">{ph}</Badge>
+                                                ))}
+                                            </div>
                                         </div>
+                                    </div>
+                                )}
 
+                                {/* Voice Script */}
+                                {selectedStep.channel === 'voice' && (
+                                    <div className="space-y-4">
                                         <div className="space-y-2">
-                                            <Label>Treść emaila (EN)</Label>
+                                            <div className="flex items-center justify-between">
+                                                <Label>Skrypt głosowy (TTS)</Label>
+                                                <span className={`text-xs ${(selectedStep.voice_script?.length || 0) > 500 ? 'text-yellow-500' : 'text-muted-foreground'}`}>
+                                                    {selectedStep.voice_script?.length || 0}/500 znaków
+                                                </span>
+                                            </div>
                                             <Textarea
-                                                value={selectedStep.email_body_en || ''}
-                                                onChange={(e) => updateStep({ email_body_en: e.target.value })}
-                                                rows={10}
-                                                className="font-mono text-sm"
+                                                value={selectedStep.voice_script || ''}
+                                                onChange={(e) => updateStep({ voice_script: e.target.value })}
+                                                rows={6}
+                                                placeholder="Tekst który zostanie odczytany przez bota..."
                                             />
+                                            <p className="text-xs text-muted-foreground">
+                                                Bot odczyta ten tekst głosem damskim. Połączenia wykonywane są w godzinach 8:00-20:00.
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted/50 p-4 rounded-lg">
+                                            <p className="text-sm font-medium mb-2">Dostępne zmienne:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{company_name}}'].map((ph) => (
+                                                    <Badge key={ph} variant="secondary" className="font-mono text-xs">{ph}</Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Email Content */}
+                                {selectedStep.channel === 'email' && (
+                                    <>
+                                        <Tabs value={activeTab} className="w-full">
+                                            <TabsContent value="pl" className="space-y-4 mt-0">
+                                                <div className="space-y-2">
+                                                    <Label>Temat emaila (PL)</Label>
+                                                    <Input
+                                                        value={selectedStep.email_subject || ''}
+                                                        onChange={(e) => updateStep({ email_subject: e.target.value })}
+                                                        placeholder="np. Przypomnienie o płatności"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Treść emaila (PL)</Label>
+                                                    <Textarea
+                                                        value={selectedStep.email_body || ''}
+                                                        onChange={(e) => updateStep({ email_body: e.target.value })}
+                                                        rows={10}
+                                                        className="font-mono text-sm"
+                                                    />
+                                                </div>
+                                            </TabsContent>
+                                            <TabsContent value="en" className="space-y-4 mt-0">
+                                                <div className="space-y-2">
+                                                    <Label>Temat emaila (EN)</Label>
+                                                    <Input
+                                                        value={selectedStep.email_subject_en || ''}
+                                                        onChange={(e) => updateStep({ email_subject_en: e.target.value })}
+                                                        placeholder="e.g. Payment Reminder"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label>Treść emaila (EN)</Label>
+                                                    <Textarea
+                                                        value={selectedStep.email_body_en || ''}
+                                                        onChange={(e) => updateStep({ email_body_en: e.target.value })}
+                                                        rows={10}
+                                                        className="font-mono text-sm"
+                                                    />
+                                                </div>
+                                            </TabsContent>
+                                        </Tabs>
+
+                                        <div className="flex flex-wrap gap-6 pt-4 border-t">
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={selectedStep.include_payment_link}
+                                                    onCheckedChange={(v) => updateStep({ include_payment_link: v })}
+                                                />
+                                                <Label>Dołącz link do płatności</Label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={selectedStep.include_interest}
+                                                    onCheckedChange={(v) => updateStep({ include_interest: v })}
+                                                />
+                                                <Label>Dołącz naliczone odsetki</Label>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Switch
+                                                    checked={selectedStep.attach_invoice || false}
+                                                    onCheckedChange={(v) => updateStep({ attach_invoice: v })}
+                                                />
+                                                <Label>Załącz oryginał faktury (PDF)</Label>
+                                            </div>
                                         </div>
 
-
-                                    </TabsContent>
-                                </Tabs>
-
-                                <div className="flex flex-wrap gap-6 pt-4 border-t">
-                                    <div className="flex items-center gap-2">
-                                        <Switch
-                                            checked={selectedStep.include_payment_link}
-                                            onCheckedChange={(v) => updateStep({ include_payment_link: v })}
-                                        />
-                                        <Label>Dołącz link do płatności</Label>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Switch
-                                            checked={selectedStep.include_interest}
-                                            onCheckedChange={(v) => updateStep({ include_interest: v })}
-                                        />
-                                        <Label>Dołącz naliczone odsetki</Label>
-                                    </div>
-                                </div>
-
-                                <div className="bg-muted/50 p-4 rounded-lg mt-4">
-                                    <p className="text-sm font-medium mb-2">Dostępne zmienne (do użycia w szablonach):</p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}', '{{company_name}}', '{{amount_with_interest}}', '{{interest_amount}}'].map((ph) => (
-                                            <Badge key={ph} variant="secondary" className="font-mono text-xs cursor-copy hover:bg-muted-foreground/20">
-                                                {ph}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                </div>
+                                        <div className="bg-muted/50 p-4 rounded-lg mt-4">
+                                            <p className="text-sm font-medium mb-2">Dostępne zmienne (do użycia w szablonach):</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}', '{{company_name}}', '{{amount_with_interest}}', '{{interest_amount}}'].map((ph) => (
+                                                    <Badge key={ph} variant="secondary" className="font-mono text-xs cursor-copy hover:bg-muted-foreground/20">
+                                                        {ph}
+                                                    </Badge>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </>
                         ) : (
                             <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">

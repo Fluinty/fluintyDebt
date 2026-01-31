@@ -33,45 +33,46 @@ export default function AuthLayout({
                             </div>
                             <h1 className="text-2xl font-bold tracking-tight text-slate-900">FluintyDebt</h1>
                         </div>
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-100/80 border border-emerald-200 text-emerald-700 text-xs font-semibold mb-4">
-                            <Zap className="w-3 h-3 fill-emerald-700" />
-                            Darmowy dostęp dla pierwszych 10 firm
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-100/80 border border-amber-200 text-amber-700 text-xs font-semibold mb-4 animate-pulse">
+                            <Zap className="w-3 h-3 fill-amber-700" />
+                            14 dni za darmo – Testuj bez ryzyka
                         </div>
                     </div>
 
                     {/* Main Value Prop */}
+                    {/* Main Value Prop */}
                     <div className="space-y-10">
                         <div>
                             <h2 className="text-4xl lg:text-5xl font-extrabold leading-[1.1] tracking-tight text-slate-900">
-                                Monitoruj swoje Faktury <br />
+                                Przestań być <br />
                                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-teal-500">
-                                    i odzyskuj długi.
+                                    bankiem dla klientów.
                                 </span>
                             </h2>
                             <p className="mt-6 text-lg text-slate-600 max-w-md leading-relaxed">
-                                Twój księgowy wysyła do KSeF. My pobieramy z KSeF, żebyś Ty wiedział na czym stoisz. Finanse i Windykacja w jednym miejscu.
+                                Faktura po terminie? Klient "zapomniał"? <strong className="text-slate-900">FluintyDebt</strong> to Twój automat, który wyśle przypomnienie, SMS-a, a nawet zadzwoni. Ty szybko odzyskujesz pieniądze, nie tracąc czasu na pisanie maili.
                             </p>
                         </div>
 
                         {/* Feature Highlights (Light Cards) */}
                         <div className="space-y-3">
                             <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-slate-200/50 hover:bg-white/80 hover:shadow-md transition-all duration-300">
-                                <div className="p-2.5 rounded-lg bg-teal-50 text-teal-600 group-hover:bg-teal-100 transition-colors">
+                                <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 group-hover:bg-emerald-100 transition-colors">
                                     <Zap className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900">Krok 1: Podłącz KSeF (lub wpisz ręcznie)</h3>
-                                    <p className="text-sm text-slate-500">Monitoruj faktury z KSeF i dodawaj te spoza systemu.</p>
+                                    <h3 className="font-semibold text-slate-900">Windykator bierze 20%. My 0%.</h3>
+                                    <p className="text-sm text-slate-500">Płacisz tylko abonament (od 49 zł). 100% odzyskanej kwoty trafia do Ciebie.</p>
                                 </div>
                             </div>
 
                             <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/60 backdrop-blur-sm border border-slate-200/50 hover:bg-white/80 hover:shadow-md transition-all duration-300">
-                                <div className="p-2.5 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                                <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition-colors">
                                     <ShieldCheck className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900">Krok 2: Automatyczna Windykacja</h3>
-                                    <p className="text-sm text-slate-500">System sam pilnuje terminów i wysyła wezwania.</p>
+                                    <h3 className="font-semibold text-slate-900">Koniec z "niezręczną rozmową"</h3>
+                                    <p className="text-sm text-slate-500">Nie musisz dzwonić i się prosić. AI przeprowadzi profesjonalną rozmowę za Ciebie.</p>
                                 </div>
                             </div>
 
@@ -80,8 +81,8 @@ export default function AuthLayout({
                                     <CheckCircle2 className="w-5 h-5" />
                                 </div>
                                 <div>
-                                    <h3 className="font-semibold text-slate-900">Rezultat: Spokój i Płynność</h3>
-                                    <p className="text-sm text-slate-500">Wiesz ile masz pieniędzy, bez dzwonienia do księgowej.</p>
+                                    <h3 className="font-semibold text-slate-900">Mail nie działa? Dzwoni AI.</h3>
+                                    <p className="text-sm text-slate-500">System eskaluje automatycznie: E-mail → SMS → Telefon → Wezwanie.</p>
                                 </div>
                             </div>
                         </div>
@@ -91,18 +92,18 @@ export default function AuthLayout({
                     <div className="flex items-center justify-between border-t border-slate-200 pt-6">
                         <div className="flex -space-x-2">
                             {/* Mock Avatars */}
-                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-200" title="Adam"></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-300" title="Beata"></div>
-                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-400" title="Cezary"></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-200 bg-[url('https://i.pravatar.cc/100?img=33')] bg-cover"></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-300 bg-[url('https://i.pravatar.cc/100?img=47')] bg-cover"></div>
+                            <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-400 bg-[url('https://i.pravatar.cc/100?img=12')] bg-cover"></div>
                             <div className="w-8 h-8 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-600">
-                                +1k
+                                +2k
                             </div>
                         </div>
                         <div className="text-right">
                             <p className="text-xs text-slate-400 uppercase tracking-widest font-semibold mb-1">
-                                Zaufali liderzy
+                                Ocena 5.0/5
                             </p>
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 justify-end">
                                 {[1, 2, 3, 4, 5].map((i) => (
                                     <svg key={i} className="w-3 h-3 text-amber-400 fill-current" viewBox="0 0 20 20">
                                         <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />

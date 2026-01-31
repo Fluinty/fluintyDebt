@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Loader2, Search } from 'lucide-react';
+import { Save, Loader2, Search, MessageSquare, Phone, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ import { KSeFSettingsCard } from '@/components/settings/ksef-settings-card';
 import { toast } from 'sonner';
 import { fetchCompanyByNip } from '@/app/actions/gus-actions';
 import { getProfile, updateProfile, type ProfileData } from '@/app/actions/profile-actions';
+import { toggleSMSEnabled, toggleVoiceEnabled } from '@/app/actions/sms-actions';
 
 // Empty profile for initial state
 const emptyProfile: ProfileData = {
@@ -29,12 +30,21 @@ const emptyProfile: ProfileData = {
     bank_name: '',
     send_thank_you_on_payment: true,
     interest_rate: 15.5,
+    sms_enabled: false,
+    voice_enabled: false,
+    thank_you_email_subject: '',
+    thank_you_email_body: '',
 };
 
 export default function SettingsPage() {
     const [isSaving, setIsSaving] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isLoadingGus, setIsLoadingGus] = useState(false);
+
+    // Toggle loading states
+    const [isTogglingSms, setIsTogglingSms] = useState(false);
+    const [isTogglingVoice, setIsTogglingVoice] = useState(false);
+
     const [profile, setProfile] = useState<ProfileData>(emptyProfile);
     const [originalProfile, setOriginalProfile] = useState<ProfileData>(emptyProfile);
     const [isDirty, setIsDirty] = useState(false);
@@ -57,7 +67,10 @@ export default function SettingsPage() {
 
     // Track changes
     useEffect(() => {
-        setIsDirty(JSON.stringify(profile) !== JSON.stringify(originalProfile));
+        // Exclude sms_enabled/voice_enabled from dirty check as they are saved immediately
+        const { sms_enabled: s1, voice_enabled: v1, ...p1 } = profile;
+        const { sms_enabled: s2, voice_enabled: v2, ...p2 } = originalProfile;
+        setIsDirty(JSON.stringify(p1) !== JSON.stringify(p2));
     }, [profile, originalProfile]);
 
     const handleGusLookup = async () => {
@@ -102,6 +115,48 @@ export default function SettingsPage() {
         }
     };
 
+    const handleSmsToggle = async (enabled: boolean) => {
+        setIsTogglingSms(true);
+        // Optimistic update
+        setProfile(prev => ({ ...prev, sms_enabled: enabled }));
+
+        try {
+            const result = await toggleSMSEnabled(enabled);
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to toggle SMS');
+            }
+            toast.success(enabled ? 'Powiadomienia SMS włączone' : 'Powiadomienia SMS wyłączone');
+            setOriginalProfile(prev => ({ ...prev, sms_enabled: enabled }));
+        } catch (error) {
+            toast.error('Błąd zmiany ustawień SMS');
+            // Revert
+            setProfile(prev => ({ ...prev, sms_enabled: !enabled }));
+        } finally {
+            setIsTogglingSms(false);
+        }
+    };
+
+    const handleVoiceToggle = async (enabled: boolean) => {
+        setIsTogglingVoice(true);
+        // Optimistic update
+        setProfile(prev => ({ ...prev, voice_enabled: enabled }));
+
+        try {
+            const result = await toggleVoiceEnabled(enabled);
+            if (!result.success) {
+                throw new Error(result.error || 'Failed to toggle Voice');
+            }
+            toast.success(enabled ? 'Połączenia głosowe włączone' : 'Połączenia głosowe wyłączone');
+            setOriginalProfile(prev => ({ ...prev, voice_enabled: enabled }));
+        } catch (error) {
+            toast.error('Błąd zmiany ustawień Voice');
+            // Revert
+            setProfile(prev => ({ ...prev, voice_enabled: !enabled }));
+        } finally {
+            setIsTogglingVoice(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <Breadcrumbs />
@@ -129,6 +184,7 @@ export default function SettingsPage() {
                     <TabsTrigger value="company">Dane firmy</TabsTrigger>
                     <TabsTrigger value="payment">Płatności</TabsTrigger>
                     <TabsTrigger value="preferences">Preferencje</TabsTrigger>
+                    <TabsTrigger value="communication">Komunikacja</TabsTrigger>
                     <TabsTrigger value="integrations">Integracje</TabsTrigger>
                 </TabsList>
 
@@ -312,6 +368,121 @@ export default function SettingsPage() {
                                     onCheckedChange={(checked) => setProfile({ ...profile, send_thank_you_on_payment: checked })}
                                 />
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Szablon emaila z podziękowaniem</CardTitle>
+                            <CardDescription>
+                                Skonfiguruj treść wiadomości wysyłanej po otrzymaniu płatności
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {!profile.send_thank_you_on_payment && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-200 dark:border-yellow-900">
+                                    ⚠️ Wysyłka podziękowań jest obecnie wyłączona. Włącz ją w sekcji powyżej.
+                                </div>
+                            )}
+                            <div className="space-y-2">
+                                <Label>Temat wiadomości</Label>
+                                <Input
+                                    value={profile.thank_you_email_subject || ''}
+                                    onChange={(e) => setProfile({ ...profile, thank_you_email_subject: e.target.value })}
+                                    placeholder="np. Dziękujemy za wpłatę - {{invoice_number}}"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Treść wiadomości</Label>
+                                <textarea
+                                    className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={profile.thank_you_email_body || ''}
+                                    onChange={(e) => setProfile({ ...profile, thank_you_email_body: e.target.value })}
+                                    placeholder="Treść emaila..."
+                                />
+                            </div>
+                            <div className="bg-muted/50 p-4 rounded-lg">
+                                <p className="text-sm font-medium mb-2">Dostępne zmienne:</p>
+                                <div className="flex flex-wrap gap-2">
+                                    {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{company_name}}'].map((ph) => (
+                                        <div key={ph} className="bg-secondary px-2 py-1 rounded text-xs font-mono">
+                                            {ph}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="communication" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Kanały komunikacji</CardTitle>
+                            <CardDescription>
+                                Zarządzaj sposobami kontaktu z kontrahentami
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Email - always active */}
+                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900">
+                                        <Mail className="h-5 w-5 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium">Email</p>
+                                        <p className="text-sm text-muted-foreground">Zawsze aktywny, bez limitu</p>
+                                    </div>
+                                </div>
+                                <span className="text-sm text-green-600 font-medium">✓ Aktywny</span>
+                            </div>
+
+                            {/* SMS */}
+                            <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900">
+                                        <MessageSquare className="h-5 w-5 text-green-600" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium">SMS</p>
+                                        <p className="text-sm text-muted-foreground">
+                                            {profile.sms_enabled
+                                                ? 'Wysyłka aktywna (wymaga środków)'
+                                                : 'Włącz, aby wysyłać powiadomienia SMS'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={!!profile.sms_enabled}
+                                    onCheckedChange={handleSmsToggle}
+                                    disabled={isTogglingSms}
+                                />
+                            </div>
+
+                            {/* Voice (Coming Soon) */}
+                            <div className="flex items-center justify-between p-4 border rounded-lg opacity-70">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900">
+                                        <Phone className="h-5 w-5 text-purple-600" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium">Połączenia głosowe</p>
+                                            <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full border border-purple-200">WKRÓTCE</span>
+                                        </div>
+                                        <p className="text-sm text-muted-foreground">
+                                            Bot windykacyjny (Wymaga aktywacji VMS w SMSAPI)
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={false}
+                                    disabled={true}
+                                />
+                            </div>
+
+
                         </CardContent>
                     </Card>
                 </TabsContent>

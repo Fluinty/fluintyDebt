@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, Edit } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, Send, Loader2, Mail, Edit, MessageSquare, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -18,6 +18,8 @@ interface ScheduledStep {
     sequence_steps: {
         email_subject: string;
         channel: string;
+        sms_body: string;
+        voice_script: string;
     } | null;
 }
 
@@ -53,6 +55,8 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
 
     const handleExecuteStep = async (stepId: string, stepIndex: number) => {
         setLoadingStepId(stepId);
+        const step = steps.find(s => s.id === stepId);
+        const channel = step?.sequence_steps?.channel || 'email';
 
         try {
             // If this is not the first pending step, skip earlier ones
@@ -76,9 +80,13 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
             const result = await executeScheduledStep(stepId);
 
             if (result.success) {
-                // Update local status immediately - no need to wait for refresh
                 setStepStatuses(prev => ({ ...prev, [stepId]: 'executed' }));
-                toast.success('Email wysłany pomyślnie!');
+
+                let successMessage = 'Email wysłany pomyślnie!';
+                if (channel === 'sms') successMessage = 'SMS wysłany pomyślnie!';
+                else if (channel === 'voice') successMessage = 'Połączenie głosowe zainicjowane!';
+
+                toast.success(successMessage);
                 router.refresh(); // Still refresh but UI is already updated
             } else {
                 toast.error(result.error || 'Błąd wysyłki');
@@ -147,10 +155,39 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                 const isCompleted = currentStatus === 'sent' || currentStatus === 'executed';
                 const isCancelled = currentStatus === 'cancelled';
 
-                // Replace placeholders in subject for preview
-                const displaySubject = seqStep?.email_subject
-                    ? processPlaceholders(seqStep.email_subject, invoiceData)
-                    : 'Krok windykacji';
+                const channel = seqStep?.channel || 'email';
+
+                let displaySubject = 'Krok windykacji';
+                if (channel === 'email' && seqStep?.email_subject) {
+                    displaySubject = seqStep.email_subject;
+                } else if (channel === 'sms' && seqStep?.sms_body) {
+                    displaySubject = seqStep.sms_body.length > 50
+                        ? seqStep.sms_body.substring(0, 50) + '...'
+                        : seqStep.sms_body;
+                } else if (channel === 'voice' && seqStep?.voice_script) {
+                    displaySubject = seqStep.voice_script.length > 50
+                        ? seqStep.voice_script.substring(0, 50) + '...'
+                        : seqStep.voice_script;
+                }
+
+                // Replace placeholders
+                displaySubject = processPlaceholders(displaySubject, invoiceData);
+
+                const getChannelIcon = () => {
+                    switch (channel) {
+                        case 'sms': return <MessageSquare className="h-3 w-3" />;
+                        case 'voice': return <Phone className="h-3 w-3" />;
+                        default: return <Mail className="h-3 w-3" />;
+                    }
+                };
+
+                const getChannelLabel = () => {
+                    switch (channel) {
+                        case 'sms': return 'SMS';
+                        case 'voice': return 'Głos';
+                        default: return 'Email';
+                    }
+                };
 
                 return (
                     <div key={step.id} className={`flex gap-4 ${isCancelled ? 'opacity-50' : ''}`}>
@@ -165,10 +202,13 @@ export function SequenceStepsList({ steps, invoiceData }: SequenceStepsListProps
                         <div className="flex-1 pb-4">
                             <div className="flex items-center justify-between gap-2">
                                 <div className="flex-1">
-                                    <p className="font-medium">{displaySubject}</p>
+                                    <p className="font-medium text-sm md:text-base">{displaySubject}</p>
                                     <p className="text-sm text-muted-foreground">{formatDate(step.scheduled_for)}</p>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> Email</span>
+                                        <span className="flex items-center gap-1">
+                                            {getChannelIcon()}
+                                            {getChannelLabel()}
+                                        </span>
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-2">

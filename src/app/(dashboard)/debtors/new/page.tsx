@@ -40,6 +40,7 @@ const debtorSchema = z.object({
     preferred_send_time: z.string().optional(),
     preferred_channel: z.string().optional(),
     preferred_language: z.enum(['pl', 'en']).optional(),
+    sms_voice_consent: z.boolean().optional(),
 });
 
 type DebtorFormData = z.infer<typeof debtorSchema>;
@@ -143,6 +144,7 @@ export default function NewDebtorPage() {
                 preferred_send_time: data.preferred_send_time || '10:00',
                 preferred_channel: data.preferred_channel || 'email',
                 preferred_language: data.preferred_language || 'pl',
+                sms_voice_consent_at: data.sms_voice_consent ? new Date().toISOString() : null,
             });
 
             if (error) {
@@ -265,6 +267,27 @@ export default function NewDebtorPage() {
                                         placeholder="np. Jan Kowalski"
                                         {...register('contact_person')}
                                     />
+                                </div>
+                                <div className="space-y-2 pt-2 border-t">
+                                    <div className="flex items-start space-x-2">
+                                        <input
+                                            type="checkbox"
+                                            id="sms_voice_consent"
+                                            className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                            {...register('sms_voice_consent')}
+                                        />
+                                        <div className="grid gap-1.5 leading-none">
+                                            <Label
+                                                htmlFor="sms_voice_consent"
+                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                            >
+                                                Zgoda na kontakt SMS i głosowy
+                                            </Label>
+                                            <p className="text-sm text-muted-foreground">
+                                                Potwierdzam, że posiadam zgodę na kontakt telefoniczny i SMS w celach windykacyjnych (zgodnie z RODO/UOKiK).
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

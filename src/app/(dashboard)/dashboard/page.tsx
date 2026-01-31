@@ -20,10 +20,11 @@ import { getActualInvoiceStatus, getDaysOverdue } from '@/lib/utils/invoice-calc
 import { StatusBadge } from '@/components/invoices/status-badge';
 import { ReceivablesChart } from '@/components/dashboard/charts';
 import { CostTrendChart } from '@/components/dashboard/cost-charts';
-import { BankAccountWidget } from '@/components/dashboard/bank-account-widget';
-import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
+
 import { UpcomingWeek } from '@/components/dashboard/upcoming-week';
 import { KSeFImportButton } from '@/components/ksef/ksef-import-button';
+import { UsageWidget } from '@/components/dashboard/usage-widget';
+import { MissingDataAlerts } from '@/components/dashboard/missing-data-alerts';
 
 export default async function DashboardPage() {
     const supabase = await createClient();
@@ -61,6 +62,13 @@ export default async function DashboardPage() {
         .eq('user_id', user?.id)
         .single();
 
+    // Fetch subscription for usage limits (safely handle missing table)
+    const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+
     const invoicesList = (invoices || []).map(inv => ({
         ...inv,
         calculatedStatus: getActualInvoiceStatus(inv),
@@ -93,17 +101,10 @@ export default async function DashboardPage() {
         link: string;
         icon: typeof Mail;
         color: string;
-    }> = [
-            ...debtorsWithoutEmail.slice(0, 3).map(d => ({
-                id: `email-${d.id}`,
-                type: 'missing_email' as const,
-                title: 'Brak adresu email',
-                description: d.name,
-                link: `/debtors/${d.id}`,
-                icon: Mail,
-                color: 'text-amber-500',
-            })),
-        ];
+    }> = [];
+
+    // REMOVED legacy email checks here as they are now handled by MissingDataAlerts
+    // which provides better visibility for both Email and Phone gaps
 
     // Add KSeF action if not configured
     if (!isKSeFConfigured && debtorsList.length > 0) {
@@ -156,95 +157,7 @@ export default async function DashboardPage() {
             clientName: inv.contractor_name,
         })) : [];
 
-    // ADVANCED ANALYTICS: RUNWAY & PROFIT MARGIN
-    const currentBalance = Number(profile?.current_balance || 0);
 
-    // 1. Runway Calculation (Avg Burn Rate last 3 months)
-    const calculateRunway = () => {
-        const today = new Date();
-        const threeMonthsAgo = new Date();
-        threeMonthsAgo.setMonth(today.getMonth() - 3);
-        threeMonthsAgo.setDate(1); // Start of 3 months ago
-
-        const recentCosts = costInvoicesList.filter(cost => {
-            const d = new Date(cost.issue_date);
-            return d >= threeMonthsAgo && d <= today;
-        });
-
-        const totalRecentCosts = recentCosts.reduce((sum, cost) => sum + Number(cost.amount_gross || cost.amount), 0);
-        const avgMonthlyBurn = totalRecentCosts / 3;
-
-        if (avgMonthlyBurn <= 0) return { months: 99, burnRate: 0 }; // Infinite runway if no costs
-        return {
-            months: Math.round((currentBalance / avgMonthlyBurn) * 10) / 10,
-            burnRate: avgMonthlyBurn
-        };
-    };
-
-    const runwayData = calculateRunway();
-
-    // 2. Profit Margin Calculation (Current Month)
-    const calculateMargin = () => {
-        const today = new Date();
-        const currentMonth = today.getMonth();
-        const currentYear = today.getFullYear();
-
-        const curMonthSales = invoicesList.filter(inv => {
-            const d = new Date(inv.issue_date);
-            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
-
-        const curMonthCosts = costInvoicesList.filter(cost => {
-            const d = new Date(cost.issue_date);
-            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
-
-        const revenue = curMonthSales.reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-        const costs = curMonthCosts.reduce((sum, cost) => sum + Number(cost.amount_gross || cost.amount), 0);
-
-        const margin = revenue > 0 ? ((revenue - costs) / revenue) * 100 : 0;
-
-        return { margin: Math.round(margin), revenue, costs };
-    };
-
-    const marginData = calculateMargin();
-
-
-    // CASH FLOW CALCULATION
-    const generateCashFlowData = () => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        let currentBalance = Number(profile?.current_balance || 0);
-        const data = [];
-
-        for (let i = 0; i <= 30; i++) {
-            const date = new Date(today);
-            date.setDate(date.getDate() + i);
-            const dateStr = date.toISOString().split('T')[0];
-
-            // Incoming (Sales due on this date)
-            const dailyIncoming = invoicesList
-                .filter(inv => inv.calculatedStatus !== 'paid' && new Date(inv.due_date).toISOString().startsWith(dateStr))
-                .reduce((sum, inv) => sum + Number(inv.amount_gross || inv.amount), 0);
-
-            // Outgoing (Costs due on this date)
-            const dailyOutgoing = costInvoicesList
-                .filter(inv => inv.payment_status !== 'paid' && new Date(inv.due_date).toISOString().startsWith(dateStr))
-                .reduce((sum, inv) => sum + Number(inv.amount), 0);
-
-            currentBalance = currentBalance + dailyIncoming - dailyOutgoing;
-
-            data.push({
-                date: dateStr,
-                balance: currentBalance,
-                incoming: dailyIncoming,
-                outgoing: dailyOutgoing
-            });
-        }
-        return data;
-    };
-
-    const cashFlowData = generateCashFlowData();
 
     // Chart logic restoration
     // Helper functions for date formatting
@@ -398,8 +311,20 @@ export default async function DashboardPage() {
                 <>
                     {/* Financial Summary & Balance Widget */}
                     <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                        {/* KPI Cards */}
-                        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* KPI Cards & Usage Widget */}
+                        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            {/* Usage Widget (shows only if limits exist) */}
+                            {subscription && (subscription.sms_limit > 0 || subscription.calls_limit > 0) && (
+                                <div className="lg:col-span-1">
+                                    <UsageWidget
+                                        smsUsed={subscription.sms_used || 0}
+                                        smsLimit={subscription.sms_limit || 0}
+                                        callsUsed={subscription.calls_used || 0}
+                                        callsLimit={subscription.calls_limit || 0}
+                                    />
+                                </div>
+                            )}
+
                             <Link href="/invoices" className="block transition-transform hover:scale-[1.01]">
                                 <Card className="relative overflow-hidden h-full">
                                     {!showSales && (
@@ -461,66 +386,18 @@ export default async function DashboardPage() {
                             </Card>
                         </div>
 
-                        {/* Bank Account Widget */}
-                        <div className="lg:col-span-1">
-                            <BankAccountWidget
-                                initialBalance={Number(profile?.current_balance || 0)}
-                                isLocked={!showSales || !showCosts}
-                            />
-                        </div>
+
                     </div>
 
-                    {/* NEW SECTION: STRATEGIC HEALTH METRICS */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Card className="border-l-4 border-l-purple-500 relative overflow-hidden">
-                            {!showSales && (
-                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Lock className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                </div>
-                            )}
-                            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Runway (Przeżywalność)</CardTitle>
-                                <TrendingUp className="h-4 w-4 text-purple-500" />
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {runwayData.months >= 99 ? '> 12 mies.' : `${runwayData.months} mies.`}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Przy śr. kosztach {formatCurrency(runwayData.burnRate)}/mies.
-                                </p>
-                            </CardContent>
-                        </Card>
 
-                        <Card className={`border-l-4 ${marginData.margin >= 0 ? 'border-l-emerald-500' : 'border-l-red-500'} relative overflow-hidden`}>
-                            {!showSales && (
-                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Lock className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                </div>
-                            )}
-                            <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Marża (Ten m-c)</CardTitle>
-                                {marginData.margin >= 0 ? <TrendingUp className="h-4 w-4 text-emerald-500" /> : <TrendingDown className="h-4 w-4 text-red-500" />}
-                            </CardHeader>
-                            <CardContent>
-                                <div className={`text-2xl font-bold ${marginData.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {marginData.margin}%
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                    Przychód: {formatCurrency(marginData.revenue)}
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Cash Flow Forecast */}
-                    <CashFlowChart
-                        data={cashFlowData}
-                        isLocked={!showSales || !showCosts}
+                    {/* Missing Data Alerts (Email/Phone gaps) */}
+                    <MissingDataAlerts
+                        debtors={debtorsList.map(d => ({
+                            id: d.id,
+                            name: d.name,
+                            missingEmail: !d.email,
+                            missingPhone: !d.phone // We check phones now too
+                        }))}
                     />
 
                     {/* Action items */}
@@ -643,25 +520,28 @@ export default async function DashboardPage() {
                         </div>
                     </div>
                 </>
-            )}
+            )
+            }
 
-            {!hasData && (
-                <Card className="py-12 bg-gradient-to-br from-primary/5 to-primary/10">
-                    <CardContent className="text-center">
-                        <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-                            <Sparkles className="h-10 w-10 text-primary" />
-                        </div>
-                        <h2 className="text-2xl font-bold mb-2">Witaj w VindycAItion!</h2>
-                        <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                            Zacznij od dodania faktur, aby zobaczyć analizy.
-                        </p>
-                        <div className="flex justify-center gap-4">
-                            {showSales && <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>}
-                            {showCosts && <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
+            {
+                !hasData && (
+                    <Card className="py-12 bg-gradient-to-br from-primary/5 to-primary/10">
+                        <CardContent className="text-center">
+                            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+                                <Sparkles className="h-10 w-10 text-primary" />
+                            </div>
+                            <h2 className="text-2xl font-bold mb-2">Witaj w VindycAItion!</h2>
+                            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+                                Zacznij od dodania faktur, aby zobaczyć analizy.
+                            </p>
+                            <div className="flex justify-center gap-4">
+                                {showSales && <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>}
+                                {showCosts && <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )
+            }
+        </div >
     );
 }

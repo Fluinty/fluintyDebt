@@ -595,8 +595,138 @@ This is your last opportunity to resolve this matter amicably.
 };
 
 /**
- * Thank you email template
+ * Wielokanałowa (Omnichannel) sequence - 7 steps
+ * Uses Email, SMS, and Voice
  */
+export const OMNICHANNEL_SEQUENCE: SequenceTemplate = {
+    name: 'Wielokanałowa (SMS & Voice)',
+    description: 'Skuteczna windykacja wykorzystująca email, SMS i połączenia głosowe',
+    isDefault: false,
+    steps: [
+        {
+            step_order: 1,
+            days_offset: -3,
+            channel: 'email',
+            email_subject: 'Przypomnienie o płatności',
+            email_body: `Dzień dobry,
+            
+Przypominamy, że za 3 dni mija termin płatności faktury {{invoice_number}}.
+
+Kwota: {{amount}}
+
+Pozdrawiamy,
+{{company_name}}`,
+            email_subject_en: 'Payment Reminder',
+            email_body_en: `Hello,
+
+Reminder: Invoice {{invoice_number}} is due in 3 days.
+
+Amount: {{amount}}
+
+Regards,
+{{company_name}}`,
+            include_payment_link: false,
+            include_interest: false,
+        },
+        {
+            step_order: 2,
+            days_offset: 0,
+            channel: 'sms',
+            email_subject: 'SMS: Dziś termin płatności', // Internal label
+            email_body: 'Placeholder', // Required by DB constraint but not used
+            sms_body: 'Dziś mija termin płatności faktury {{invoice_number}} na kwotę {{amount}}. Prosimy o wpłatę. {{company_name}}',
+            sms_body_en: 'Today is the due date for invoice {{invoice_number}}, amount: {{amount}}. Please pay now. {{company_name}}',
+            include_payment_link: true,
+            include_interest: false,
+        },
+        {
+            step_order: 3,
+            days_offset: 3,
+            channel: 'voice',
+            email_subject: 'Voice: Przypomnienie po terminie',
+            email_body: 'Placeholder',
+            voice_script: 'Dzień dobry. Tu {{company_name}}. Przypominamy o nieopłaconej fakturze numer {{invoice_number}} na kwotę {{amount}}. Termin minął 3 dni temu. Prosimy o wpłatę.',
+            voice_script_en: 'Hello. This is {{company_name}}. We are calling about unpaid invoice {{invoice_number}} for {{amount}}. It is 3 days overdue. Please make a payment.',
+            include_payment_link: false,
+            include_interest: false,
+        },
+        {
+            step_order: 4,
+            days_offset: 7,
+            channel: 'email',
+            email_subject: 'Wezwanie do zapłaty',
+            email_body: `Szanowni Państwo,
+
+Faktura {{invoice_number}} jest przeterminowana o 7 dni. Prosimy o wpłatę {{amount}}.
+
+{{payment_link}}
+
+Z poważaniem,
+{{company_name}}`,
+            email_subject_en: 'Payment Demand',
+            email_body_en: `Dear Customer,
+
+Invoice {{invoice_number}} is 7 days overdue. Please pay {{amount}}.
+
+{{payment_link}}
+
+Regards,
+{{company_name}}`,
+            include_payment_link: true,
+            include_interest: true,
+        },
+        {
+            step_order: 5,
+            days_offset: 14,
+            channel: 'sms',
+            email_subject: 'SMS: Pilne wezwanie',
+            email_body: 'Placeholder',
+            sms_body: 'PILNE: Faktura {{invoice_number}} ({{amount}}) nadal nieopłacona. Prosimy o natychmiastową wpłatę. {{company_name}}',
+            sms_body_en: 'URGENT: Invoice {{invoice_number}} ({{amount}}) is still unpaid. Please pay immediately. {{company_name}}',
+            include_payment_link: true,
+            include_interest: false,
+        },
+        {
+            step_order: 6,
+            days_offset: 21,
+            channel: 'voice',
+            email_subject: 'Voice: Ostateczne wezwanie',
+            email_body: 'Placeholder',
+            voice_script: 'Dzień dobry. Prosimy o natychmiastowe uregulowanie faktury {{invoice_number}} na kwotę {{amount}}. W przypadku braku wpłaty sprawa trafi do windykacji.',
+            voice_script_en: 'Good morning. Please settle invoice {{invoice_number}} for {{amount}} immediately. Failure to pay will result in debt collection actions.',
+            include_payment_link: false,
+            include_interest: true,
+        },
+        {
+            step_order: 7,
+            days_offset: 30,
+            channel: 'email',
+            email_subject: 'OSTATECZNE WEZWANIE PRZED SĄDOWE',
+            email_body: `OSTATECZNE WEZWANIE
+
+Brak wpłaty dla faktury {{invoice_number}}. Kwota: {{amount_with_interest}}.
+
+Sprawa zostanie skierowana do sądu.
+
+{{payment_link}}
+
+{{company_name}}`,
+            email_subject_en: 'FINAL PRE-LEGAL DEMAND',
+            email_body_en: `FINAL DEMAND
+
+No payment received for invoice {{invoice_number}}. Amount: {{amount_with_interest}}.
+
+Legal action will be taken.
+
+{{payment_link}}
+
+{{company_name}}`,
+            include_payment_link: true,
+            include_interest: true,
+        }
+    ],
+};
+
 export const THANK_YOU_EMAIL = {
     subject: 'Potwierdzenie otrzymania płatności - {{invoice_number}}',
     body: `Dzień dobry,
@@ -616,4 +746,5 @@ export const DEFAULT_SEQUENCES = [
     GENTLE_SEQUENCE,
     STANDARD_SEQUENCE,
     QUICK_ESCALATION_SEQUENCE,
+    OMNICHANNEL_SEQUENCE,
 ];

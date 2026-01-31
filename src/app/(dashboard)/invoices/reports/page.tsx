@@ -1,4 +1,4 @@
-import { Download, FileText, TrendingUp, Users, BarChart3, Mail } from 'lucide-react';
+import { BarChart3, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -346,10 +346,7 @@ export default async function SalesReportsPage() {
                             <SelectItem value="year">Ostatni rok</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline">
-                        <Download className="h-4 w-4 mr-2" />
-                        Eksportuj
-                    </Button>
+
                 </div>
             </div>
 
@@ -480,32 +477,7 @@ export default async function SalesReportsPage() {
                         </CardContent>
                     </Card>
 
-                    {/* Quick reports */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Szybkie raporty</CardTitle>
-                            <CardDescription>Pobierz gotowe raporty</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <Button variant="outline" className="h-auto py-4 flex-col gap-2">
-                                    <FileText className="h-6 w-6" />
-                                    <span>Raport należności</span>
-                                    <span className="text-xs text-muted-foreground">PDF</span>
-                                </Button>
-                                <Button variant="outline" className="h-auto py-4 flex-col gap-2">
-                                    <Users className="h-6 w-6" />
-                                    <span>Lista dłużników</span>
-                                    <span className="text-xs text-muted-foreground">Excel</span>
-                                </Button>
-                                <Button variant="outline" className="h-auto py-4 flex-col gap-2">
-                                    <TrendingUp className="h-6 w-6" />
-                                    <span>Analiza skuteczności</span>
-                                    <span className="text-xs text-muted-foreground">PDF</span>
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
+
                 </>
             )}
         </div>

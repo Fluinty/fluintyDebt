@@ -197,13 +197,120 @@ export async function markInvoiceAsPaid(invoiceId: string, amountPaid?: number) 
         return { error: error.message };
     }
 
-    // Cancel pending scheduled steps if fully paid
+    // If fully paid, handle post-payment actions
     if (newAmountPaid >= totalAmount) {
+        // 1. Cancel pending steps
         await supabase
             .from('scheduled_steps')
             .update({ status: 'cancelled' })
             .eq('invoice_id', invoiceId)
             .eq('status', 'pending');
+
+        // 2. Update Cash Flow (Balance)
+        const currentPaid = Number(invoice.amount_paid || 0);
+        const addedAmount = newAmountPaid - currentPaid;
+
+        const { data: { user } } = await supabase.auth.getUser();
+
+        if (user && addedAmount > 0) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+
+            if (profile) {
+                // Update balance
+                const newBalance = (Number(profile.current_balance) || 0) + addedAmount;
+                await supabase
+                    .from('profiles')
+                    .update({ current_balance: newBalance })
+                    .eq('id', user.id);
+
+                // 3. Send Thank You Email (if enabled)
+                if (profile.send_thank_you_on_payment) {
+                    // Fetch invoice details for email (need debtor email and invoice number)
+                    const { data: fullInvoice } = await supabase
+                        .from('invoices')
+                        .select(`
+                            *,
+                            debtors (name, email)
+                        `)
+                        .eq('id', invoiceId)
+                        .single();
+
+                    if (fullInvoice && fullInvoice.debtors?.email) {
+                        const subjectTemplate = profile.thank_you_email_subject || 'Dziękujemy za wpłatę - {{invoice_number}}';
+                        const bodyTemplate = profile.thank_you_email_body || 'Cześć {{debtor_name}},\n\nDziękujemy za opłacenie faktury {{invoice_number}}.\n\nPozdrawiamy,\n{{company_name}}';
+
+                        const variables: Record<string, string> = {
+                            '{{debtor_name}}': fullInvoice.debtors.name,
+                            '{{invoice_number}}': fullInvoice.invoice_number,
+                            '{{amount}}': fullInvoice.amount.toFixed(2),
+                            '{{company_name}}': profile.company_name || profile.full_name || 'FluintyDebt'
+                        };
+
+                        let subject = subjectTemplate;
+                        let body = bodyTemplate;
+
+                        Object.entries(variables).forEach(([key, value]) => {
+                            subject = subject.replace(new RegExp(key, 'g'), value);
+                            body = body.replace(new RegExp(key, 'g'), value);
+                        });
+
+                        // Log email sending (Mock)
+                        console.log('Sending Thank You Email:', {
+                            to: fullInvoice.debtors.email,
+                            subject,
+                            body
+                        });
+
+                        // Record action
+                        await supabase
+                            .from('collection_actions')
+                            .insert({
+                                user_id: user.id,
+                                invoice_id: invoiceId,
+                                action_type: 'email',
+                                status: 'sent',
+                                channel: 'email',
+                                recipient_email: fullInvoice.debtors.email,
+                                sent_at: new Date().toISOString(),
+                                metadata: {
+                                    type: 'thank_you_email',
+                                    subject,
+                                    body_preview: body.substring(0, 100) + '...'
+                                },
+                            });
+
+                        // Create Notification for Payment
+                        await supabase.from('notifications').insert({
+                            user_id: user.id,
+                            type: 'payment',
+                            title: 'Otrzymano płatność',
+                            message: `${fullInvoice.debtors.name || 'Klient'} opłacił fakturę ${fullInvoice.invoice_number}`,
+                            link: `/invoices/${invoiceId}`,
+                            reference_id: invoiceId,
+                            metadata: { amount: addedAmount, invoice_number: fullInvoice.invoice_number }
+                        });
+                    }
+                } else {
+                    // Even if no email sent, notify user about payment
+                    const { data: inv } = await supabase.from('invoices').select('invoice_number, debtors(name)').eq('id', invoiceId).single();
+                    if (inv) {
+                        await supabase.from('notifications').insert({
+                            user_id: user.id,
+                            type: 'payment',
+                            title: 'Otrzymano płatność',
+                            message: `${(inv.debtors as any)?.name || 'Klient'} opłacił fakturę ${inv.invoice_number}`,
+                            link: `/invoices/${invoiceId}`,
+                            reference_id: invoiceId,
+                            metadata: { amount: addedAmount, invoice_number: inv.invoice_number }
+                        });
+                    }
+                }
+            }
+        }
     }
 
     return { success: true, status: newAmountPaid >= totalAmount ? 'paid' : 'partial' };
@@ -285,7 +392,7 @@ export async function sendManualReminder(invoiceId: string) {
     });
 
     // Log the action to collection_actions
-    const { error: actionError } = await supabase
+    const { data: action, error: actionError } = await supabase
         .from('collection_actions')
         .insert({
             user_id: user.id,
@@ -303,11 +410,24 @@ export async function sendManualReminder(invoiceId: string) {
                 due_date: dueDate,
                 sender: senderName,
             },
-        });
+        })
+        .select()
+        .single();
 
     if (actionError) {
         console.error('Error logging action:', actionError);
         // Don't fail - email was "sent"
+    } else {
+        // Create Notification for Sent Email
+        await supabase.from('notifications').insert({
+            user_id: user.id,
+            type: 'info',
+            title: 'Wysłano przypomnienie',
+            message: `Manualne przypomnienie email do ${debtorName} (${invoiceNumber})`,
+            link: `/invoices/${invoiceId}`,
+            reference_id: action.id,
+            metadata: { type: 'manual_reminder', debtor: debtorName }
+        });
     }
 
     return { success: true, message: 'Wezwanie zostało wysłane' };
@@ -394,6 +514,7 @@ export async function changeInvoiceSequence(
         await supabase.from('scheduled_steps').insert(scheduledSteps);
     }
 
+    revalidatePath(`/invoices/${invoiceId}`);
     return { success: true };
 }
 

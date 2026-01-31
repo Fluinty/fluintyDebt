@@ -2,28 +2,28 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Bell, AlertTriangle, CheckCircle, Clock, Calendar, RefreshCw } from 'lucide-react';
+import { Bell, AlertTriangle, CheckCircle, Clock, Calendar, RefreshCw, Mail, MessageSquare, Trash2, AlertCircle } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuTrigger,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { createClient } from '@/lib/supabase/client';
-import { formatCurrency } from '@/lib/utils/format-currency';
-
-const STORAGE_KEY = 'fluintydebt_read_notifications';
+import { generateDailyNotifications, markAllNotificationsAsRead, markNotificationAsRead } from '@/app/actions/notification-actions';
 
 interface Notification {
     id: string;
-    type: 'overdue' | 'due_soon' | 'payment' | 'scheduled' | 'info' | 'ksef_sync';
+    type: string;
     title: string;
     message: string;
-    time: string;
     link?: string;
     read: boolean;
-    dbId?: string; // For database-stored notifications
+    created_at: string;
 }
 
 function getNotificationIcon(type: string) {
@@ -38,12 +38,18 @@ function getNotificationIcon(type: string) {
             return <Calendar className="h-4 w-4 text-blue-500" />;
         case 'ksef_sync':
             return <RefreshCw className="h-4 w-4 text-emerald-500" />;
+        case 'email_sent':
+        case 'info':
+            return <Mail className="h-4 w-4 text-indigo-500" />;
+        case 'sms_sent':
+            return <MessageSquare className="h-4 w-4 text-orange-500" />;
         default:
             return <Bell className="h-4 w-4" />;
     }
 }
 
-function getRelativeTime(date: Date): string {
+function getRelativeTime(dateStr: string): string {
+    const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
@@ -57,296 +63,170 @@ function getRelativeTime(date: Date): string {
     return date.toLocaleDateString('pl-PL');
 }
 
-function getReadNotifications(): Set<string> {
-    if (typeof window === 'undefined') return new Set();
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored) {
-            const data = JSON.parse(stored);
-            // Clean up old entries (older than 7 days)
-            const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-            const filtered = Object.entries(data)
-                .filter(([_, timestamp]) => (timestamp as number) > weekAgo)
-                .map(([id]) => id);
-            return new Set(filtered);
-        }
-    } catch {
-        // Ignore errors
-    }
-    return new Set();
-}
-
-function markAsRead(ids: string[]) {
-    if (typeof window === 'undefined') return;
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        const data = stored ? JSON.parse(stored) : {};
-        const now = Date.now();
-        ids.forEach(id => {
-            data[id] = now;
-        });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-        // Ignore errors
-    }
-}
-
 export function NotificationsDropdown() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isOpen, setIsOpen] = useState(false);
-    const [readIds, setReadIds] = useState<Set<string>>(new Set());
+    const [unreadCount, setUnreadCount] = useState(0);
 
     const loadNotifications = useCallback(async () => {
-        const supabase = createClient();
-        const notifs: Notification[] = [];
-        const today = new Date();
-        const todayStr = today.toISOString().split('T')[0];
-        const storedReadIds = getReadNotifications();
+        try {
+            const supabase = createClient();
 
-        // 1. Get overdue invoices
-        const { data: overdueInvoices } = await supabase
-            .from('invoices')
-            .select('id, invoice_number, amount, due_date, debtors(name)')
-            .lt('due_date', todayStr)
-            .neq('status', 'paid')
-            .order('due_date', { ascending: true })
-            .limit(5);
+            // Fetch notifications from DB
+            const { data } = await supabase
+                .from('notifications')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
 
-        if (overdueInvoices) {
-            overdueInvoices.forEach(inv => {
-                const dueDate = new Date(inv.due_date);
-                const daysOverdue = Math.floor((today.getTime() - dueDate.getTime()) / 86400000);
-                const notifId = `overdue-${inv.id}`;
-                notifs.push({
-                    id: notifId,
-                    type: 'overdue',
-                    title: 'Faktura przeterminowana',
-                    message: `${inv.invoice_number} - ${daysOverdue} dni po terminie (${formatCurrency(inv.amount)})`,
-                    time: getRelativeTime(dueDate),
-                    link: `/invoices/${inv.id}`,
-                    read: storedReadIds.has(notifId),
-                });
-            });
+            if (data) {
+                setNotifications(data as Notification[]);
+                setUnreadCount(data.filter((n: any) => !n.read).length);
+            }
+        } catch (error) {
+            console.error('Failed to load notifications', error);
+        } finally {
+            setIsLoading(false);
         }
-
-        // 2. Get invoices due soon (next 3 days)
-        const threeDaysLater = new Date(today);
-        threeDaysLater.setDate(threeDaysLater.getDate() + 3);
-        const threeDaysStr = threeDaysLater.toISOString().split('T')[0];
-
-        const { data: dueSoonInvoices } = await supabase
-            .from('invoices')
-            .select('id, invoice_number, amount, due_date, debtors(name)')
-            .gte('due_date', todayStr)
-            .lte('due_date', threeDaysStr)
-            .neq('status', 'paid')
-            .order('due_date', { ascending: true })
-            .limit(3);
-
-        if (dueSoonInvoices) {
-            dueSoonInvoices.forEach(inv => {
-                const dueDate = new Date(inv.due_date);
-                const daysUntil = Math.floor((dueDate.getTime() - today.getTime()) / 86400000);
-                const notifId = `due-${inv.id}`;
-                notifs.push({
-                    id: notifId,
-                    type: 'due_soon',
-                    title: 'Zbliża się termin',
-                    message: `${inv.invoice_number} - za ${daysUntil} dni (${formatCurrency(inv.amount)})`,
-                    time: `Termin: ${dueDate.toLocaleDateString('pl-PL')}`,
-                    link: `/invoices/${inv.id}`,
-                    read: storedReadIds.has(notifId),
-                });
-            });
-        }
-
-        // 3. Get today's scheduled steps
-        const { data: scheduledToday } = await supabase
-            .from('scheduled_steps')
-            .select(`
-                id,
-                scheduled_for,
-                invoices(invoice_number),
-                sequence_steps(email_subject, channel)
-            `)
-            .eq('scheduled_for', todayStr)
-            .eq('status', 'pending')
-            .limit(3);
-
-        if (scheduledToday) {
-            scheduledToday.forEach(step => {
-                const invoice = step.invoices as any;
-                const seqStep = step.sequence_steps as any;
-                const notifId = `sched-${step.id}`;
-                notifs.push({
-                    id: notifId,
-                    type: 'scheduled',
-                    title: 'Zaplanowana akcja',
-                    message: `Email dla ${invoice?.invoice_number || 'faktury'}`,
-                    time: 'Dzisiaj',
-                    link: '/scheduler',
-                    read: storedReadIds.has(notifId),
-                });
-            });
-        }
-
-        // 4. Get recent payments (last 7 days)
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-
-        const { data: recentPayments } = await supabase
-            .from('invoices')
-            .select('id, invoice_number, amount, paid_at, debtors(name)')
-            .eq('status', 'paid')
-            .gte('paid_at', weekAgo.toISOString())
-            .order('paid_at', { ascending: false })
-            .limit(3);
-
-        if (recentPayments) {
-            recentPayments.forEach(inv => {
-                const debtor = inv.debtors as any;
-                const notifId = `paid-${inv.id}`;
-                notifs.push({
-                    id: notifId,
-                    type: 'payment',
-                    title: 'Otrzymano płatność',
-                    message: `${debtor?.name || 'Kontrahent'} zapłacił ${formatCurrency(inv.amount)}`,
-                    time: inv.paid_at ? getRelativeTime(new Date(inv.paid_at)) : 'Niedawno',
-                    link: `/invoices/${inv.id}`,
-                    read: storedReadIds.has(notifId),
-                });
-            });
-        }
-
-        // 5. Get database notifications (KSeF sync, etc.)
-        const { data: dbNotifications } = await supabase
-            .from('notifications')
-            .select('*')
-            .eq('read', false)
-            .order('created_at', { ascending: false })
-            .limit(5);
-
-        if (dbNotifications) {
-            dbNotifications.forEach(n => {
-                notifs.push({
-                    id: `db-${n.id}`,
-                    dbId: n.id,
-                    type: n.type as Notification['type'],
-                    title: n.title,
-                    message: n.message,
-                    time: getRelativeTime(new Date(n.created_at)),
-                    link: n.link,
-                    read: n.read,
-                });
-            });
-        }
-
-        // Sort by read status and limit
-        notifs.sort((a, b) => {
-            if (a.read === b.read) return 0;
-            return a.read ? 1 : -1;
-        });
-
-        setNotifications(notifs.slice(0, 10));
-        setReadIds(storedReadIds);
-        setIsLoading(false);
     }, []);
 
+    // Initial load and generate check
     useEffect(() => {
-        loadNotifications();
+        // Trigger verification for overdue/scheduled items
+        // This acts as a "lazy cron" when user logs in
+        generateDailyNotifications().then(() => {
+            loadNotifications();
+        });
+
+        // Set up realtime subscription for new notifications
+        const supabase = createClient();
+        const channel = supabase
+            .channel('notifications_changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                },
+                (payload) => {
+                    // Refresh on new notification
+                    loadNotifications();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [loadNotifications]);
 
-    // Mark all as read when dropdown closes
-    const handleOpenChange = async (open: boolean) => {
-        setIsOpen(open);
+    const handleMarkAsRead = async (id: string, link?: string) => {
+        // Optimistic update
+        setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+        setUnreadCount(prev => Math.max(0, prev - 1));
 
-        if (!open && notifications.length > 0) {
-            // Mark all current notifications as read
-            const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
-            if (unreadIds.length > 0) {
-                markAsRead(unreadIds);
-                // Update local state
-                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        await markNotificationAsRead(id);
 
-                // Mark database notifications as read
-                const dbIds = notifications.filter(n => n.dbId && !n.read).map(n => n.dbId!);
-                if (dbIds.length > 0) {
-                    const supabase = createClient();
-                    await supabase
-                        .from('notifications')
-                        .update({ read: true })
-                        .in('id', dbIds);
-                }
-            }
+        if (link) {
+            setIsOpen(false);
         }
     };
 
-    const unreadCount = notifications.filter(n => !n.read).length;
+    const handleMarkAllRead = async () => {
+        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+        setUnreadCount(0);
+        await markAllNotificationsAsRead();
+    };
 
     return (
-        <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
+        <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
             <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative">
                     <Bell className="h-5 w-5" />
                     {unreadCount > 0 && (
-                        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                        <Badge className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center text-xs animate-in zoom-in">
                             {unreadCount}
                         </Badge>
                     )}
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80">
-                <div className="px-3 py-2 border-b flex justify-between items-center">
-                    <p className="font-semibold">Powiadomienia</p>
+            <DropdownMenuContent align="end" className="w-80 sm:w-96">
+                <div className="px-4 py-3 border-b flex justify-between items-center bg-muted/30">
+                    <div className="flex items-center gap-2">
+                        <Bell className="h-4 w-4" />
+                        <span className="font-semibold">Powiadomienia</span>
+                    </div>
                     {unreadCount > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                            {unreadCount} nowych
-                        </span>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-auto px-2 text-xs text-muted-foreground hover:text-primary"
+                            onClick={handleMarkAllRead}
+                        >
+                            Oznacz wszystkie
+                        </Button>
                     )}
                 </div>
-                <div className="max-h-80 overflow-y-auto">
+
+                <div className="max-h-[70vh] overflow-y-auto">
                     {isLoading ? (
-                        <div className="px-3 py-4 text-center text-muted-foreground">
-                            Ładowanie...
+                        <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                            <RefreshCw className="h-6 w-6 animate-spin mb-2 opacity-50" />
+                            <span className="text-xs">Ładowanie...</span>
                         </div>
                     ) : notifications.length === 0 ? (
-                        <div className="px-3 py-4 text-center text-muted-foreground">
-                            Brak powiadomień
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                            <Bell className="h-10 w-10 mb-3 opacity-20" />
+                            <p className="text-sm">Brak nowych powiadomień</p>
                         </div>
                     ) : (
-                        notifications.map((notif) => (
-                            <Link
-                                key={notif.id}
-                                href={notif.link || '#'}
-                                className={`block px-3 py-3 hover:bg-muted/50 cursor-pointer border-b last:border-0 ${!notif.read ? 'bg-primary/5' : ''}`}
-                            >
-                                <div className="flex gap-3">
-                                    <div className="mt-1">{getNotificationIcon(notif.type)}</div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className={`text-sm ${!notif.read ? 'font-medium' : ''}`}>
-                                            {notif.title}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground truncate">
-                                            {notif.message}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground mt-1">{notif.time}</p>
+                        <div className="divide-y">
+                            {notifications.map((notif) => (
+                                <div
+                                    key={notif.id}
+                                    className={`relative group flex gap-4 p-4 transition-colors hover:bg-muted/50 ${!notif.read ? 'bg-primary/5' : ''}`}
+                                >
+                                    <div className={`mt-1 flex-shrink-0 ${!notif.read ? 'animate-pulse' : ''}`}>
+                                        {getNotificationIcon(notif.type)}
+                                    </div>
+                                    <div className="flex-1 min-w-0 space-y-1">
+                                        <Link
+                                            href={notif.link || '#'}
+                                            onClick={() => handleMarkAsRead(notif.id, notif.link)}
+                                            className="block focus:outline-none"
+                                        >
+                                            <p className={`text-sm leading-none ${!notif.read ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}>
+                                                {notif.title}
+                                            </p>
+                                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                                {notif.message}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground/60 mt-2 flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {getRelativeTime(notif.created_at)}
+                                            </p>
+                                        </Link>
                                     </div>
                                     {!notif.read && (
-                                        <div className="w-2 h-2 bg-primary rounded-full mt-2" />
+                                        <div className="absolute top-4 right-4">
+                                            <div className="h-2 w-2 rounded-full bg-primary ring-2 ring-primary/20" />
+                                        </div>
                                     )}
                                 </div>
-                            </Link>
-                        ))
+                            ))}
+                        </div>
                     )}
                 </div>
-                {notifications.length > 0 && (
-                    <div className="px-3 py-2 border-t">
-                        <Link href="/history" className="text-xs text-primary hover:underline">
-                            Zobacz całą historię
-                        </Link>
-                    </div>
-                )}
+
+                <div className="p-2 border-t bg-muted/30">
+                    <Link href="/history">
+                        <Button variant="ghost" size="sm" className="w-full text-xs text-muted-foreground">
+                            Zobacz pełną historię
+                        </Button>
+                    </Link>
+                </div>
             </DropdownMenuContent>
         </DropdownMenu>
     );

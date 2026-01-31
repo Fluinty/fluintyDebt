@@ -17,6 +17,10 @@ export type ProfileData = {
     send_thank_you_on_payment: boolean;
     interest_rate: number;
     email?: string;
+    sms_enabled?: boolean;
+    voice_enabled?: boolean;
+    thank_you_email_subject?: string;
+    thank_you_email_body?: string;
 };
 
 export async function getProfile() {
@@ -66,6 +70,8 @@ export async function updateProfile(data: ProfileData) {
                 bank_name: data.bank_name,
                 send_thank_you_on_payment: data.send_thank_you_on_payment,
                 interest_rate: data.interest_rate,
+                thank_you_email_subject: data.thank_you_email_subject,
+                thank_you_email_body: data.thank_you_email_body,
                 // Email cannot be updated here
             })
             .eq('id', user.id);

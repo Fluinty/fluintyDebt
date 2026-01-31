@@ -35,6 +35,7 @@ const debtorSchema = z.object({
     postal_code: z.string().optional(),
     contact_person: z.string().optional(),
     notes: z.string().optional(),
+    sms_voice_consent: z.boolean().optional(),
 });
 
 type DebtorFormData = z.infer<typeof debtorSchema>;
@@ -57,6 +58,7 @@ interface Debtor {
     default_sequence_id: string | null;
     preferred_language: 'pl' | 'en' | null;
     notes: string | null;
+    sms_voice_consent_at: string | null;
 }
 
 export default function EditDebtorPage({ params }: { params: Promise<{ id: string }> }) {
@@ -141,6 +143,7 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
                     postal_code: debtorData.postal_code || '',
                     contact_person: debtorData.contact_person || '',
                     notes: debtorData.notes || '',
+                    sms_voice_consent: !!debtorData.sms_voice_consent_at,
                 });
             }
             if (sequencesData) setSequences(sequencesData);
@@ -169,6 +172,7 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
                     notes: data.notes || null,
                     default_sequence_id: selectedSequence || null,
                     preferred_language: selectedLanguage as 'pl' | 'en',
+                    sms_voice_consent_at: data.sms_voice_consent ? new Date().toISOString() : null,
                 })
                 .eq('id', debtorId);
 
@@ -276,6 +280,27 @@ export default function EditDebtorPage({ params }: { params: Promise<{ id: strin
                         <div className="space-y-2">
                             <Label htmlFor="contact_person">Osoba kontaktowa</Label>
                             <Input id="contact_person" {...register('contact_person')} />
+                        </div>
+                        <div className="space-y-2 pt-2 border-t">
+                            <div className="flex items-start space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="sms_voice_consent"
+                                    className="mt-1 h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                    {...register('sms_voice_consent')}
+                                />
+                                <div className="grid gap-1.5 leading-none">
+                                    <Label
+                                        htmlFor="sms_voice_consent"
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                        Zgoda na kontakt SMS i głosowy
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">
+                                        Potwierdzam, że posiadam zgodę na kontakt telefoniczny i SMS w celach windykacyjnych (zgodnie z RODO/UOKiK).
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

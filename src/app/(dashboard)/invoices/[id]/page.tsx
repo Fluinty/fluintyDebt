@@ -17,6 +17,7 @@ import { SequenceControls } from '@/components/invoices/sequence-controls';
 import { SequenceStepsList } from '@/components/invoices/sequence-steps-list';
 import { InvoiceQuickActions } from '@/components/invoices/invoice-quick-actions';
 import { SequenceSelector } from '@/components/invoices/sequence-selector';
+import { ActionHistory } from '@/components/invoices/action-history';
 
 export default async function InvoiceDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -42,10 +43,17 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
         .from('scheduled_steps')
         .select(`
             *,
-            sequence_steps (email_subject, channel)
+            sequence_steps (email_subject, channel, sms_body, voice_script)
         `)
         .eq('invoice_id', id)
         .order('scheduled_for');
+
+    // Fetch execution history
+    const { data: interactionHistory } = await supabase
+        .from('collection_actions')
+        .select('*')
+        .eq('invoice_id', id)
+        .order('created_at', { ascending: false });
 
     // Calculate dynamic status and days overdue
     const calculatedStatus = getActualInvoiceStatus(invoice);
@@ -186,6 +194,9 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                             )}
                         </CardContent>
                     </Card>
+
+                    {/* Action History */}
+                    <ActionHistory actions={interactionHistory || []} />
                 </div>
 
                 {/* Sidebar */}

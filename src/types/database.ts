@@ -192,13 +192,15 @@ export type Database = {
                     sequence_id: string;
                     step_order: number;
                     days_offset: number;
-                    channel: 'email';
+                    channel: 'email' | 'sms' | 'voice';
                     email_subject: string | null;
                     email_body: string;
                     sms_body: string | null;
                     email_subject_en: string | null;
                     email_body_en: string | null;
                     sms_body_en: string | null;
+                    voice_script: string | null;
+                    voice_script_en: string | null;
                     include_payment_link: boolean;
                     include_interest: boolean;
                     is_ai_generated: boolean;
@@ -210,13 +212,15 @@ export type Database = {
                     sequence_id: string;
                     step_order: number;
                     days_offset: number;
-                    channel: 'email';
+                    channel: 'email' | 'sms' | 'voice';
                     email_subject?: string | null;
                     email_body: string;
                     sms_body?: string | null;
+                    voice_script?: string | null;
                     email_subject_en?: string | null;
                     email_body_en?: string | null;
                     sms_body_en?: string | null;
+                    voice_script_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
                     is_ai_generated?: boolean;
@@ -228,13 +232,15 @@ export type Database = {
                     sequence_id?: string;
                     step_order?: number;
                     days_offset?: number;
-                    channel?: 'email';
+                    channel?: 'email' | 'sms' | 'voice';
                     email_subject?: string | null;
-                    email_body?: string;
+                    email_body: string;
                     sms_body?: string | null;
+                    voice_script?: string | null;
                     email_subject_en?: string | null;
                     email_body_en?: string | null;
                     sms_body_en?: string | null;
+                    voice_script_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
                     is_ai_generated?: boolean;
@@ -269,6 +275,7 @@ export type Database = {
                     preferred_language: 'pl' | 'en';
                     created_at: string;
                     updated_at: string;
+                    sms_voice_consent_at: string | null;
                 };
                 Insert: {
                     id?: string;
@@ -296,6 +303,7 @@ export type Database = {
                     preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;
+                    sms_voice_consent_at?: string | null;
                 };
                 Update: {
                     id?: string;
@@ -323,6 +331,7 @@ export type Database = {
                     preferred_language?: 'pl' | 'en';
                     created_at?: string;
                     updated_at?: string;
+                    sms_voice_consent_at?: string | null;
                 };
             };
             invoices: {
@@ -472,6 +481,7 @@ export type Database = {
                     status: 'pending' | 'executed' | 'skipped' | 'cancelled';
                     executed_at: string | null;
                     created_at: string;
+                    retry_count: number;
                 };
                 Insert: {
                     id?: string;
@@ -482,6 +492,7 @@ export type Database = {
                     status?: 'pending' | 'executed' | 'skipped' | 'cancelled';
                     executed_at?: string | null;
                     created_at?: string;
+                    retry_count?: number;
                 };
                 Update: {
                     id?: string;
@@ -492,6 +503,7 @@ export type Database = {
                     status?: 'pending' | 'executed' | 'skipped' | 'cancelled';
                     executed_at?: string | null;
                     created_at?: string;
+                    retry_count?: number;
                 };
             };
             vendors: {
@@ -546,6 +558,65 @@ export type Database = {
                     bank_name?: string | null;
                     notes?: string | null;
                     category?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+            };
+            subscriptions: {
+                Row: {
+                    id: string;
+                    user_id: string;
+                    stripe_customer_id: string | null;
+                    stripe_subscription_id: string | null;
+                    status: string;
+                    plan_interval: string | null;
+                    current_period_end: string | null;
+                    trial_ends_at: string | null;
+                    tier: 'starter' | 'growth' | 'unlimited';
+                    monthly_invoice_limit: number;
+                    sms_limit: number;
+                    calls_limit: number;
+                    sms_used: number;
+                    calls_used: number;
+                    usage_reset_at: string | null;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    user_id: string;
+                    stripe_customer_id?: string | null;
+                    stripe_subscription_id?: string | null;
+                    status: string;
+                    plan_interval?: string | null;
+                    current_period_end?: string | null;
+                    trial_ends_at?: string | null;
+                    tier?: 'starter' | 'growth' | 'unlimited';
+                    monthly_invoice_limit?: number;
+                    sms_limit?: number;
+                    calls_limit?: number;
+                    sms_used?: number;
+                    calls_used?: number;
+                    usage_reset_at?: string | null;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    user_id?: string;
+                    stripe_customer_id?: string | null;
+                    stripe_subscription_id?: string | null;
+                    status?: string;
+                    plan_interval?: string | null;
+                    current_period_end?: string | null;
+                    trial_ends_at?: string | null;
+                    tier?: 'starter' | 'growth' | 'unlimited';
+                    monthly_invoice_limit?: number;
+                    sms_limit?: number;
+                    calls_limit?: number;
+                    sms_used?: number;
+                    calls_used?: number;
+                    usage_reset_at?: string | null;
                     created_at?: string;
                     updated_at?: string;
                 };

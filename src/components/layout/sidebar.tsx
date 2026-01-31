@@ -65,10 +65,6 @@ const navigation: NavGroup[] = [
                 name: 'Należności',
                 href: '/invoices',
                 icon: FileText,
-                children: [
-                    { name: 'Wszystkie', href: '/invoices' },
-                    { name: 'Import', href: '/invoices/import' },
-                ],
             },
             { name: 'Kontrahenci', href: '/debtors', icon: Users },
             { name: 'Raporty', href: '/invoices/reports', icon: BarChart3 },

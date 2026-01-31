@@ -41,6 +41,23 @@ export async function markCostAsPaid(id: string) {
         throw new Error('Failed to update cost invoice');
     }
 
+    // UPDATE CASH FLOW: Deduct from current_balance
+    // We get the current balance first to be safe, or use an RPC if concurrency was high concern.
+    // For MVP, simple fetch-update is acceptable.
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('current_balance')
+        .eq('id', user.id)
+        .single();
+
+    if (profile) {
+        const newBalance = (Number(profile.current_balance) || 0) - Number(fullAmount);
+        await supabase
+            .from('profiles')
+            .update({ current_balance: newBalance })
+            .eq('id', user.id);
+    }
+
     revalidatePath(`/costs/${id}`);
     revalidatePath('/costs');
     revalidatePath('/dashboard');
