@@ -31,9 +31,9 @@ interface StatusChartProps {
 }
 
 interface ActivityChartProps {
-    data?: Array<{ day: string; emails: number }>;
-    dailyData?: Array<{ hour: string; emails: number }>;
-    monthlyData?: Array<{ week: string; emails: number }>;
+    data?: Array<{ day: string; emails: number; sms?: number }>;
+    dailyData?: Array<{ hour: string; emails: number; sms?: number }>;
+    monthlyData?: Array<{ week: string; emails: number; sms?: number }>;
 }
 
 interface CashFlowProps {
@@ -301,7 +301,8 @@ export function ActivityChart({ data, dailyData, monthlyData }: ActivityChartPro
                             <YAxis stroke="#6b7280" fontSize={12} />
                             <Tooltip />
                             <Legend />
-                            <Bar dataKey="emails" name="Email" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="emails" name="Email" fill="#3b82f6" radius={[4, 4, 0, 0]} stackId="a" />
+                            <Bar dataKey="sms" name="SMS" fill="#f59e0b" radius={[4, 4, 0, 0]} stackId="a" />
                         </BarChart>
                     </ResponsiveContainer>
                 )}

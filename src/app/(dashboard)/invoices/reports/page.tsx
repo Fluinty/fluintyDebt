@@ -54,6 +54,8 @@ export default async function SalesReportsPage() {
         .reduce((sum, i) => sum + Number(i.amount) - Number(i.amount_paid || 0), 0);
 
     const emailsSent = actionsList.filter(a => a.action_type === 'email' && a.status === 'sent').length;
+    const smsSent = actionsList.filter(a => a.action_type === 'sms' && a.status === 'sent').length;
+    const totalMessagesSent = emailsSent + smsSent;
 
     const paidInvoices = invoicesList.filter(i => i.calculatedStatus === 'paid').length;
     const totalInvoices = invoicesList.length;
@@ -291,19 +293,29 @@ export default async function SalesReportsPage() {
             const today = new Date();
             return d.getHours() === hour && d.toDateString() === today.toDateString() && a.action_type === 'email';
         }).length,
+        sms: allSentActions.filter(a => {
+            const d = new Date(a.sent_at || a.created_at);
+            const today = new Date();
+            return d.getHours() === hour && d.toDateString() === today.toDateString() && a.action_type === 'sms';
+        }).length,
     })).filter((_, i) => i >= 8 && i <= 18);
 
     const dayNames = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
-    const activityByDay: Record<string, { emails: number }> = {};
-    dayNames.forEach(day => { activityByDay[day] = { emails: 0 }; });
+    const activityByDay: Record<string, { emails: number; sms: number }> = {};
+    dayNames.forEach(day => { activityByDay[day] = { emails: 0, sms: 0 }; });
 
     allSentActions.forEach(action => {
         const date = new Date(action.sent_at || action.created_at);
         const dayName = dayNames[date.getDay()];
         if (action.action_type === 'email') activityByDay[dayName].emails++;
+        if (action.action_type === 'sms') activityByDay[dayName].sms++;
     });
 
-    const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({ day, emails: activityByDay[day].emails }));
+    const weeklyActivityData = ['Pon', 'Wt', 'Śr', 'Czw', 'Pt'].map(day => ({
+        day,
+        emails: activityByDay[day].emails,
+        sms: activityByDay[day].sms
+    }));
 
     const monthlyActivityData = (() => {
         const data = [];
@@ -315,9 +327,11 @@ export default async function SalesReportsPage() {
             weekEnd.setDate(weekEnd.getDate() + 6);
             const weekActions = allSentActions.filter(a => {
                 const d = new Date(a.sent_at || a.created_at);
-                return d >= weekStart && d <= weekEnd && a.action_type === 'email';
+                return d >= weekStart && d <= weekEnd;
             });
-            data.push({ week: `Tydz. ${4 - i}`, emails: weekActions.length });
+            const emailCount = weekActions.filter(a => a.action_type === 'email').length;
+            const smsCount = weekActions.filter(a => a.action_type === 'sms').length;
+            data.push({ week: `Tydz. ${4 - i}`, emails: emailCount, sms: smsCount });
         }
         return data;
     })();
@@ -387,8 +401,10 @@ export default async function SalesReportsPage() {
                         </Card>
                         <Card>
                             <CardContent className="pt-6 text-center">
-                                <p className="text-2xl font-bold text-blue-600">{emailsSent}</p>
-                                <p className="text-xs text-muted-foreground">Wysłanych emaili</p>
+                                <CardContent className="pt-6 text-center">
+                                    <p className="text-2xl font-bold text-blue-600">{totalMessagesSent}</p>
+                                    <p className="text-xs text-muted-foreground">Wysłanych wiadomości</p>
+                                </CardContent>
                             </CardContent>
                         </Card>
                     </div>

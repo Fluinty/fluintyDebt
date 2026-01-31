@@ -204,7 +204,7 @@ export default async function SchedulerPage() {
                                                         <div className="flex items-center gap-2 shrink-0">
                                                             {stepsPerInvoice[step.invoice_id] && (
                                                                 <Badge variant="outline" className="text-xs whitespace-nowrap">
-                                                                    Krok {stepsPerInvoice[step.invoice_id].executed + 1}/{stepsPerInvoice[step.invoice_id].total}
+                                                                    Krok {seqStep?.step_order}/{stepsPerInvoice[step.invoice_id].total}
                                                                 </Badge>
                                                             )}
                                                             {seqStep?.sequences?.name && (

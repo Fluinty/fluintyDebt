@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Plus, FileDown, FileText } from 'lucide-react';
+import { Plus, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/breadcrumbs';
@@ -74,11 +74,7 @@ export default async function InvoicesPage({
                         syncMode="sales"
                         variant="outline"
                     />
-                    <Link href="/invoices/import">
-                        <Button variant="ghost" size="icon" title="Import z pliku">
-                            <FileDown className="h-4 w-4" />
-                        </Button>
-                    </Link>
+
                     <Link href="/invoices/new">
                         <Button>
                             <Plus className="h-4 w-4 mr-2" />
