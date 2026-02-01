@@ -57,18 +57,6 @@ export default function NewDebtorPage() {
     const [isLoadingGus, setIsLoadingGus] = useState(false);
     const [sequences, setSequences] = useState<Sequence[]>([]);
 
-    // Load sequences
-    useEffect(() => {
-        async function loadSequences() {
-            const supabase = createClient();
-            const { data } = await supabase
-                .from('sequences')
-                .select('id, name, description')
-                .order('name');
-            if (data) setSequences(data);
-        }
-        loadSequences();
-    }, []);
 
     const {
         register,
@@ -87,6 +75,36 @@ export default function NewDebtorPage() {
     });
 
     const nipValue = watch('nip');
+
+    // Load sequences and user's default sequence
+    useEffect(() => {
+        async function loadData() {
+            const supabase = createClient();
+
+            // Load sequences
+            const { data: sequencesData } = await supabase
+                .from('sequences')
+                .select('id, name, description')
+                .order('name');
+            if (sequencesData) setSequences(sequencesData);
+
+            // Load user's default sequence from profile
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user) {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('default_sequence_id')
+                    .eq('id', user.id)
+                    .single();
+
+                // Auto-set default sequence if user has one configured
+                if (profile?.default_sequence_id) {
+                    setValue('default_sequence_id', profile.default_sequence_id);
+                }
+            }
+        }
+        loadData();
+    }, [setValue]);
 
     const handleGusLookup = async () => {
         if (!nipValue || nipValue.trim().length === 0) {
@@ -415,7 +433,10 @@ export default function NewDebtorPage() {
                                 {/* Default sequence selection */}
                                 <div className="space-y-2 pt-4 border-t">
                                     <Label>Domyślna sekwencja windykacyjna</Label>
-                                    <Select onValueChange={(value) => setValue('default_sequence_id', value)}>
+                                    <Select
+                                        value={watch('default_sequence_id') || ''}
+                                        onValueChange={(value) => setValue('default_sequence_id', value)}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Wybierz sekwencję (opcjonalnie)" />
                                         </SelectTrigger>

@@ -4,8 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     Building2,
-    Users,
-    FileText,
     Zap,
     Check,
     ArrowRight,
@@ -18,11 +16,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { fetchCompanyByNip } from '@/app/actions/gus-actions';
 
 interface OnboardingWizardProps {
     onComplete: (data?: any) => void;
@@ -31,19 +28,10 @@ interface OnboardingWizardProps {
 const steps = [
     { id: 1, title: 'Dane firmy', icon: Building2 },
     { id: 2, title: 'KSeF (opcjonalne)', icon: FileKey },
-    { id: 3, title: 'Pierwszy kontrahent', icon: Users },
-    { id: 4, title: 'Pierwsza faktura', icon: FileText },
-    { id: 5, title: 'Sekwencja', icon: Zap },
+    { id: 3, title: 'Domyślna sekwencja', icon: Zap },
 ];
 
-const VAT_RATES = [
-    { value: '23', label: '23%' },
-    { value: '8', label: '8%' },
-    { value: '5', label: '5%' },
-    { value: '0', label: '0%' },
-    { value: 'zw', label: 'Zwolniony' },
-    { value: 'np', label: 'Nie podlega' },
-];
+
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const router = useRouter();
@@ -61,29 +49,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         bank_account: '',
     });
 
-    // Debtor data
-    const [debtorData, setDebtorData] = useState({
-        name: '',
-        nip: '',
-        email: '',
-        phone: '',
-        address: '',
-        city: '',
-        postal_code: '',
-    });
-    const [skipDebtor, setSkipDebtor] = useState(false);
 
-    // Invoice data
-    const [invoiceData, setInvoiceData] = useState({
-        invoice_number: '',
-        amount_net: '',
-        vat_rate: '23',
-        amount_gross: '',
-        issue_date: new Date().toISOString().split('T')[0],
-        due_date: '',
-        description: '',
-    });
-    const [skipInvoice, setSkipInvoice] = useState(false);
 
     // Sequence choice
     const [selectedSequence, setSelectedSequence] = useState('standard');
@@ -96,70 +62,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     });
 
     const progress = (currentStep / steps.length) * 100;
-
-    // Calculate gross from net
-    const calculateGross = (net: string, vatRate: string) => {
-        if (!net) return '';
-        const netNum = parseFloat(net);
-        if (isNaN(netNum)) return '';
-
-        if (vatRate === 'zw' || vatRate === 'np') {
-            return net;
-        }
-        const rate = parseFloat(vatRate) / 100;
-        return (netNum * (1 + rate)).toFixed(2);
-    };
-
-    // Update gross when net or VAT changes
-    const handleNetChange = (value: string) => {
-        setInvoiceData({
-            ...invoiceData,
-            amount_net: value,
-            amount_gross: calculateGross(value, invoiceData.vat_rate),
-        });
-    };
-
-    const handleVatChange = (value: string) => {
-        setInvoiceData({
-            ...invoiceData,
-            vat_rate: value,
-            amount_gross: calculateGross(invoiceData.amount_net, value),
-        });
-    };
-
-    // GUS lookup for debtor
-    const handleGusLookup = async () => {
-        if (!debtorData.nip || debtorData.nip.length !== 10) {
-            toast.error('Wprowadź poprawny NIP (10 cyfr)');
-            return;
-        }
-
-        setLoadingGus(true);
-        try {
-            const response = await fetch(`/api/gus/lookup?nip=${debtorData.nip}`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.name) {
-                    setDebtorData({
-                        ...debtorData,
-                        name: data.name || debtorData.name,
-                        address: data.street || '',
-                        city: data.city || '',
-                        postal_code: data.postalCode || '',
-                    });
-                    toast.success('Dane pobrane z GUS');
-                } else {
-                    toast.error('Nie znaleziono firmy w GUS');
-                }
-            } else {
-                toast.error('Błąd połączenia z GUS');
-            }
-        } catch (error) {
-            toast.error('Nie można połączyć się z GUS');
-        } finally {
-            setLoadingGus(false);
-        }
-    };
 
     const handleNext = () => {
         if (currentStep < steps.length) {
@@ -175,18 +77,36 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
     };
 
-    const handleSkipStep = () => {
-        if (currentStep === 3) {
-            // Skipping debtor means we can't add invoice either (invoice needs debtor)
-            setSkipDebtor(true);
-            setSkipInvoice(true);
-            // Jump to step 5 (sequences), skipping step 4
-            setCurrentStep(5);
+    const handleGusLookup = async () => {
+        if (!companyData.nip || companyData.nip.trim().length === 0) {
+            toast.error('Wprowadź numer NIP');
             return;
         }
-        if (currentStep === 4) setSkipInvoice(true);
-        handleNext();
+
+        setLoadingGus(true);
+        try {
+            const result = await fetchCompanyByNip(companyData.nip);
+
+            if (result.success && result.data) {
+                setCompanyData({
+                    ...companyData,
+                    name: result.data.name || companyData.name,
+                    street: result.data.address || companyData.street,
+                    city: result.data.city || companyData.city,
+                    postal_code: result.data.postal_code || companyData.postal_code,
+                });
+                toast.success('Dane pobrane z GUS');
+            } else {
+                toast.error(result.error || 'Nie znaleziono danych');
+            }
+        } catch (error) {
+            toast.error('Błąd połączenia z GUS');
+        } finally {
+            setLoadingGus(false);
+        }
     };
+
+
 
     const handleComplete = () => {
         // Build address from parts
@@ -201,8 +121,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 postal_code: companyData.postal_code,
                 bank_account: companyData.bank_account,
             },
-            debtor: skipDebtor ? null : debtorData,
-            invoice: skipInvoice ? null : invoiceData,
             ksef: ksefData,
             sequence: selectedSequence,
         };
@@ -248,9 +166,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     <CardDescription>
                         {currentStep === 1 && 'Uzupełnij podstawowe dane Twojej firmy'}
                         {currentStep === 2 && 'Automatyczny import faktur z Krajowego Systemu e-Faktur'}
-                        {currentStep === 3 && 'Dodaj pierwszego kontrahenta do windykacji'}
-                        {currentStep === 4 && 'Dodaj pierwszą fakturę do odzyskania'}
-                        {currentStep === 5 && 'Wybierz domyślną sekwencję windykacyjną'}
+                        {currentStep === 3 && 'Wybierz domyślną sekwencję windykacyjną'}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -269,13 +185,31 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="company_nip">NIP *</Label>
-                                    <Input
-                                        id="company_nip"
-                                        value={companyData.nip}
-                                        onChange={(e) => setCompanyData({ ...companyData, nip: e.target.value })}
-                                        placeholder="1234567890"
-                                        maxLength={10}
-                                    />
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id="company_nip"
+                                            value={companyData.nip}
+                                            onChange={(e) => setCompanyData({ ...companyData, nip: e.target.value })}
+                                            placeholder="1234567890"
+                                            maxLength={10}
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={handleGusLookup}
+                                            disabled={loadingGus}
+                                            title="Pobierz dane z GUS"
+                                        >
+                                            {loadingGus ? (
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <Search className="h-4 w-4" />
+                                            )}
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        Wpisz NIP i kliknij lupę, aby pobrać dane z GUS
+                                    </p>
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
@@ -408,227 +342,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         </div>
                     )}
 
-                    {/* Step 3: Debtor */}
+
+
+                    {/* Step 3: Sequence */}
                     {currentStep === 3 && (
-                        <div className="space-y-4">
-                            {!skipDebtor ? (
-                                <>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_nip">NIP kontrahenta</Label>
-                                            <div className="flex gap-2">
-                                                <Input
-                                                    id="debtor_nip"
-                                                    value={debtorData.nip}
-                                                    onChange={(e) => setDebtorData({ ...debtorData, nip: e.target.value })}
-                                                    placeholder="9876543210"
-                                                    maxLength={10}
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    onClick={handleGusLookup}
-                                                    disabled={loadingGus}
-                                                    title="Pobierz dane z GUS"
-                                                >
-                                                    {loadingGus ? (
-                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Search className="h-4 w-4" />
-                                                    )}
-                                                </Button>
-                                            </div>
-                                            <p className="text-xs text-muted-foreground">
-                                                Wpisz NIP i kliknij lupę, aby pobrać dane z GUS
-                                            </p>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_name">Nazwa kontrahenta</Label>
-                                            <Input
-                                                id="debtor_name"
-                                                value={debtorData.name}
-                                                onChange={(e) => setDebtorData({ ...debtorData, name: e.target.value })}
-                                                placeholder="ABC Sp. z o.o."
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_email">Email</Label>
-                                            <Input
-                                                id="debtor_email"
-                                                type="email"
-                                                value={debtorData.email}
-                                                onChange={(e) => setDebtorData({ ...debtorData, email: e.target.value })}
-                                                placeholder="kontakt@abc.pl"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_phone">Telefon</Label>
-                                            <Input
-                                                id="debtor_phone"
-                                                value={debtorData.phone}
-                                                onChange={(e) => setDebtorData({ ...debtorData, phone: e.target.value })}
-                                                placeholder="+48 123 456 789"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="debtor_address">Adres</Label>
-                                        <Input
-                                            id="debtor_address"
-                                            value={debtorData.address}
-                                            onChange={(e) => setDebtorData({ ...debtorData, address: e.target.value })}
-                                            placeholder="ul. Przykładowa 10"
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_city">Miasto</Label>
-                                            <Input
-                                                id="debtor_city"
-                                                value={debtorData.city}
-                                                onChange={(e) => setDebtorData({ ...debtorData, city: e.target.value })}
-                                                placeholder="Kraków"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="debtor_postal">Kod pocztowy</Label>
-                                            <Input
-                                                id="debtor_postal"
-                                                value={debtorData.postal_code}
-                                                onChange={(e) => setDebtorData({ ...debtorData, postal_code: e.target.value })}
-                                                placeholder="30-001"
-                                            />
-                                        </div>
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-center py-6">
-                                    <p className="text-muted-foreground">
-                                        Dodasz kontrahentów później
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSkipDebtor(false)}
-                                        className="text-sm text-primary hover:underline mt-2"
-                                    >
-                                        Chcę jednak dodać teraz
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Step 4: Invoice */}
-                    {currentStep === 4 && (
-                        <div className="space-y-4">
-                            {!skipInvoice ? (
-                                <>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_number">Numer faktury</Label>
-                                            <Input
-                                                id="invoice_number"
-                                                value={invoiceData.invoice_number}
-                                                onChange={(e) => setInvoiceData({ ...invoiceData, invoice_number: e.target.value })}
-                                                placeholder="FV/2026/001"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_vat">Stawka VAT</Label>
-                                            <Select value={invoiceData.vat_rate} onValueChange={handleVatChange}>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Wybierz stawkę" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {VAT_RATES.map((rate) => (
-                                                        <SelectItem key={rate.value} value={rate.value}>
-                                                            {rate.label}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_net">Kwota netto (PLN)</Label>
-                                            <Input
-                                                id="invoice_net"
-                                                type="number"
-                                                step="0.01"
-                                                value={invoiceData.amount_net}
-                                                onChange={(e) => handleNetChange(e.target.value)}
-                                                placeholder="4065.04"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_gross">Kwota brutto (PLN)</Label>
-                                            <Input
-                                                id="invoice_gross"
-                                                type="number"
-                                                step="0.01"
-                                                value={invoiceData.amount_gross}
-                                                readOnly
-                                                className="bg-muted"
-                                                placeholder="5000.00"
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                Obliczana automatycznie
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_issue">Termin wystawienia</Label>
-                                            <Input
-                                                id="invoice_issue"
-                                                type="date"
-                                                value={invoiceData.issue_date}
-                                                onChange={(e) => setInvoiceData({ ...invoiceData, issue_date: e.target.value })}
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor="invoice_due">Termin płatności</Label>
-                                            <Input
-                                                id="invoice_due"
-                                                type="date"
-                                                value={invoiceData.due_date}
-                                                onChange={(e) => setInvoiceData({ ...invoiceData, due_date: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="invoice_desc">Opis</Label>
-                                        <Textarea
-                                            id="invoice_desc"
-                                            value={invoiceData.description}
-                                            onChange={(e) => setInvoiceData({ ...invoiceData, description: e.target.value })}
-                                            placeholder="Usługi konsultingowe..."
-                                            rows={2}
-                                        />
-                                    </div>
-                                </>
-                            ) : (
-                                <div className="text-center py-6">
-                                    <p className="text-muted-foreground">
-                                        Dodasz faktury później
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSkipInvoice(false)}
-                                        className="text-sm text-primary hover:underline mt-2"
-                                    >
-                                        Chcę jednak dodać teraz
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* Step 5: Sequence */}
-                    {currentStep === 5 && (
                         <div className="space-y-4">
                             <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-lg">
                                 <p className="text-sm">
@@ -703,27 +420,20 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 </Button>
                             )}
                         </div>
-                        <div className="flex gap-2">
-                            {/* Skip button for steps 3 and 4 */}
-                            {(currentStep === 3 || currentStep === 4) && !(skipDebtor && currentStep === 3) && !(skipInvoice && currentStep === 4) && (
-                                <Button variant="ghost" onClick={handleSkipStep}>
-                                    Pomiń
-                                </Button>
+
+                        <Button onClick={handleNext} disabled={currentStep === 1 && !canProceedStep1}>
+                            {currentStep === steps.length ? (
+                                <>
+                                    <Check className="h-4 w-4 mr-2" />
+                                    Zakończ
+                                </>
+                            ) : (
+                                <>
+                                    Dalej
+                                    <ArrowRight className="h-4 w-4 ml-2" />
+                                </>
                             )}
-                            <Button onClick={handleNext} disabled={currentStep === 1 && !canProceedStep1}>
-                                {currentStep === steps.length ? (
-                                    <>
-                                        <Check className="h-4 w-4 mr-2" />
-                                        Zakończ
-                                    </>
-                                ) : (
-                                    <>
-                                        Dalej
-                                        <ArrowRight className="h-4 w-4 ml-2" />
-                                    </>
-                                )}
-                            </Button>
-                        </div>
+                        </Button>
                     </div>
                 </CardContent>
             </Card>

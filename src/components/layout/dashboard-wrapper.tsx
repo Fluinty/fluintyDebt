@@ -90,7 +90,7 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                 });
             }
 
-            // 2. Get sequence_id from the wizard selection first (we need it for debtor)
+            // 2. Get sequence_id from the wizard selection
             let selectedSequenceId: string | null = null;
             if (data?.sequence) {
                 const sequenceNameMap: Record<string, string> = {
@@ -109,96 +109,12 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
 
                 if (sequences && sequences.length > 0) {
                     selectedSequenceId = sequences[0].id;
-                }
-            }
 
-            // 3. Create debtor if provided (with sequence from wizard)
-            let createdDebtorId: string | null = null;
-            if (data?.debtor && data.debtor.name) {
-                const { data: newDebtor, error: debtorError } = await supabase
-                    .from('debtors')
-                    .insert({
-                        user_id: user.id,
-                        name: data.debtor.name,
-                        nip: data.debtor.nip || null,
-                        email: data.debtor.email || null,
-                        phone: data.debtor.phone || null,
-                        address: data.debtor.address || null,
-                        city: data.debtor.city || null,
-                        postal_code: data.debtor.postal_code || null,
-                        default_sequence_id: selectedSequenceId,
-                    })
-                    .select('id')
-                    .single();
-
-                if (debtorError) {
-                    console.error('Debtor save error:', debtorError);
-                    // Don't block - debtor is optional
-                } else {
-                    createdDebtorId = newDebtor?.id;
-                }
-            }
-
-            // 4. Create invoice if provided AND debtor was created
-            if (data?.invoice && data.invoice.invoice_number && createdDebtorId) {
-                // Use the selectedSequenceId we already fetched above
-
-                const dueDate = data.invoice.due_date || new Date().toISOString().split('T')[0];
-
-                const { data: newInvoice, error: invoiceError } = await supabase
-                    .from('invoices')
-                    .insert({
-                        user_id: user.id,
-                        debtor_id: createdDebtorId,
-                        invoice_number: data.invoice.invoice_number,
-                        amount: parseFloat(data.invoice.amount_gross) || 0,
-                        amount_net: parseFloat(data.invoice.amount_net) || 0,
-                        vat_rate: data.invoice.vat_rate || '23',
-                        amount_gross: parseFloat(data.invoice.amount_gross) || 0,
-                        issue_date: data.invoice.issue_date || new Date().toISOString().split('T')[0],
-                        due_date: dueDate,
-                        description: data.invoice.description || null,
-                        status: 'pending',
-                        sequence_id: selectedSequenceId,
-                        auto_send_enabled: true,
-                    })
-                    .select('id')
-                    .single();
-
-                if (invoiceError) {
-                    console.error('Invoice save error:', invoiceError);
-                    // Don't block - invoice is optional
-                } else if (newInvoice && selectedSequenceId) {
-                    // Generate scheduled steps for the invoice
-                    const { data: steps } = await supabase
-                        .from('sequence_steps')
-                        .select('*')
-                        .eq('sequence_id', selectedSequenceId)
-                        .order('step_order');
-
-                    if (steps && steps.length > 0) {
-                        const dueDateObj = new Date(dueDate);
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-
-                        const scheduledSteps = steps
-                            .map((step: any) => {
-                                const scheduledDate = new Date(dueDateObj);
-                                scheduledDate.setDate(scheduledDate.getDate() + step.days_offset);
-                                return {
-                                    invoice_id: newInvoice.id,
-                                    sequence_step_id: step.id,
-                                    scheduled_date: scheduledDate.toISOString().split('T')[0],
-                                    scheduled_time: '10:00',
-                                    status: scheduledDate < today ? 'skipped' : 'pending',
-                                };
-                            })
-                            .filter((s: any) => s.status === 'pending');
-
-                        if (scheduledSteps.length > 0) {
-                            await supabase.from('scheduled_steps').insert(scheduledSteps);
-                        }
-                    }
+                    // Save default_sequence_id to profile
+                    await supabase
+                        .from('profiles')
+                        .update({ default_sequence_id: selectedSequenceId })
+                        .eq('id', user.id);
                 }
             }
 
@@ -217,33 +133,6 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                 if (ksefError) {
                     console.error('KSeF save error:', ksefError);
                     // Don't block
-                }
-            }
-
-            // 5. Set default sequence (find matching sequence and update profile)
-            if (data?.sequence) {
-                // Map wizard sequence choice to actual sequence names
-                const sequenceNameMap: Record<string, string> = {
-                    'gentle': 'Windykacja Łagodna',
-                    'standard': 'Windykacja Standardowa',
-                    'quick': 'Szybka Eskalacja',
-                };
-
-                const sequenceName = sequenceNameMap[data.sequence] || 'Windykacja Standardowa';
-
-                // Find matching system sequence
-                const { data: sequences } = await supabase
-                    .from('sequences')
-                    .select('id')
-                    .eq('name', sequenceName)
-                    .eq('is_system', true)
-                    .limit(1);
-
-                if (sequences && sequences.length > 0) {
-                    await supabase
-                        .from('profiles')
-                        .update({ default_sequence_id: sequences[0].id })
-                        .eq('id', user.id);
                 }
             }
 

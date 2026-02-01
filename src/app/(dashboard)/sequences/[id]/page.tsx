@@ -208,9 +208,9 @@ export default function SequenceEditorPage() {
             email_body_en: '',
             sms_body: '',
             voice_script: '',
-            include_payment_link: true,
+            include_payment_link: false,
             include_interest: false,
-            attach_invoice: false,
+            attach_invoice: true,
         };
         const updatedSteps = [...sequence.steps, newStep];
         setSequence({ ...sequence, steps: updatedSteps });
@@ -505,12 +505,15 @@ export default function SequenceEditorPage() {
                                         </Tabs>
 
                                         <div className="flex flex-wrap gap-6 pt-4 border-t">
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 opacity-50">
                                                 <Switch
-                                                    checked={selectedStep.include_payment_link}
-                                                    onCheckedChange={(v) => updateStep({ include_payment_link: v })}
+                                                    checked={false}
+                                                    disabled
                                                 />
-                                                <Label>Dołącz link do płatności</Label>
+                                                <Label className="flex items-center gap-2">
+                                                    Dołącz link do płatności
+                                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800 rounded">Soon</span>
+                                                </Label>
                                             </div>
                                             <div className="flex items-center gap-2 opacity-50">
                                                 <Switch

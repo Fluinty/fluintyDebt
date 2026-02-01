@@ -55,6 +55,7 @@ interface Sequence {
     id: string;
     name: string;
     description: string | null;
+    is_default?: boolean;
 }
 
 // Component for live VAT calculation display
@@ -87,13 +88,14 @@ export default function NewInvoicePage() {
         register,
         handleSubmit,
         setValue,
+        watch,
         control,
         formState: { errors },
     } = useForm<InvoiceFormData>({
         resolver: zodResolver(invoiceSchema),
         defaultValues: {
             vat_rate: '23',
-            auto_send_enabled: true,
+            auto_send_enabled: false,
             send_time: '10:00',
         },
     });
@@ -110,7 +112,8 @@ export default function NewInvoicePage() {
 
             const { data: sequencesData } = await supabase
                 .from('sequences')
-                .select('id, name, description')
+                .select('id, name, description, is_default')
+                .order('is_default', { ascending: false })
                 .order('name');
 
             if (debtorsData) setDebtors(debtorsData);
@@ -252,8 +255,15 @@ export default function NewInvoicePage() {
                                         // Inherit default settings from debtor
                                         const selectedDebtor = debtors.find(d => d.id === value);
                                         if (selectedDebtor) {
+                                            // Use debtor's sequence, or fall back to system default
                                             if (selectedDebtor.default_sequence_id) {
                                                 setValue('sequence_id', selectedDebtor.default_sequence_id);
+                                            } else {
+                                                // Fallback to system default sequence
+                                                const systemDefault = sequences.find(s => s.is_default);
+                                                if (systemDefault) {
+                                                    setValue('sequence_id', systemDefault.id);
+                                                }
                                             }
                                             setValue('auto_send_enabled', selectedDebtor.auto_send_enabled ?? true);
                                             setValue('send_time', selectedDebtor.preferred_send_time || '10:00');
@@ -339,21 +349,17 @@ export default function NewInvoicePage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <Select onValueChange={(value) => setValue('sequence_id', value)}>
+                                <Select
+                                    value={watch('sequence_id') || ''}
+                                    onValueChange={(value) => setValue('sequence_id', value)}
+                                >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Wybierz sekwencję (opcjonalnie)" />
                                     </SelectTrigger>
                                     <SelectContent>
                                         {sequences.map((seq) => (
                                             <SelectItem key={seq.id} value={seq.id}>
-                                                <div>
-                                                    <span className="font-medium">{seq.name}</span>
-                                                    {seq.description && (
-                                                        <span className="text-muted-foreground ml-2 text-xs">
-                                                            {seq.description}
-                                                        </span>
-                                                    )}
-                                                </div>
+                                                {seq.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -389,13 +395,12 @@ export default function NewInvoicePage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="send_time">Godzina wysyłki</Label>
-                                    <Input
-                                        id="send_time"
-                                        type="time"
-                                        {...register('send_time')}
-                                    />
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">10:00</span>
+                                        <span className="text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">Coming soon</span>
+                                    </div>
                                     <p className="text-xs text-muted-foreground">
-                                        O tej godzinie będą wysyłane wiadomości w zaplanowane dni.
+                                        Wiadomości będą wysyłane o 10:00. Zmiana godziny - wkrótce.
                                     </p>
                                 </div>
                             </CardContent>
