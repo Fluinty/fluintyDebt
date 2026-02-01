@@ -665,6 +665,19 @@ export async function syncKSeFInvoices(
                 console.log('[Sync] Invoice status:', invoiceStatus, 'days until due:', daysUntilDue);
                 console.log('[Sync] Assigning sequence_id:', sequenceId, 'to invoice for debtor:', debtorId);
 
+                // CHECK FOR DUPLICATE: Skip if invoice with same invoice_number already exists
+                const { data: existingInvoiceCheck } = await supabase
+                    .from('invoices')
+                    .select('id')
+                    .eq('user_id', user.id)
+                    .eq('invoice_number', invoiceHeader.invoiceNumber)
+                    .maybeSingle();
+
+                if (existingInvoiceCheck) {
+                    console.log('[Sync] Skipping duplicate invoice:', invoiceHeader.invoiceNumber, '- already exists with ID:', existingInvoiceCheck.id);
+                    continue; // Skip this invoice, go to next one
+                }
+
                 const { data: newInvoice, error: invoiceError } = await supabase
                     .from('invoices')
                     .insert({
