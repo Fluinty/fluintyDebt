@@ -22,7 +22,7 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
 
 interface OnboardingWizardProps {
-    onComplete: () => void;
+    onComplete: (data?: any) => void;
 }
 
 const steps = [
@@ -89,15 +89,16 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     };
 
     const handleComplete = () => {
-        console.log('Onboarding complete:', {
+        const data = {
             company: companyData,
-            ksef: ksefData.skipSetup ? 'skipped' : ksefData,
             debtor: debtorData,
             invoice: invoiceData,
+            ksef: ksefData,
             sequence: selectedSequence,
-        });
+        };
+        console.log('Onboarding complete:', data);
         toast.success('Konfiguracja zakończona! Witaj w FluintyDebt 🎉');
-        onComplete();
+        onComplete(data);
     };
 
     const handleSkip = () => {

@@ -49,13 +49,25 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
         checkOnboardingStatus();
     }, []);
 
-    const handleOnboardingComplete = async () => {
+    const handleOnboardingComplete = async (data?: any) => {
         try {
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
 
-            if (user) {
-                // Update profile to mark onboarding as complete
+            if (user && data?.company) {
+                // Update profile with company data
+                await supabase
+                    .from('profiles')
+                    .update({
+                        company_name: data.company.name,
+                        company_nip: data.company.nip,
+                        company_address: data.company.address,
+                        bank_account_number: data.company.bank_account,
+                        onboarding_completed: true
+                    })
+                    .eq('id', user.id);
+            } else if (user) {
+                // Just mark as complete if skipped or no data
                 await supabase
                     .from('profiles')
                     .update({ onboarding_completed: true })
