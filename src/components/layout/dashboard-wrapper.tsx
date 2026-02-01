@@ -90,7 +90,29 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                 });
             }
 
-            // 2. Create debtor if provided
+            // 2. Get sequence_id from the wizard selection first (we need it for debtor)
+            let selectedSequenceId: string | null = null;
+            if (data?.sequence) {
+                const sequenceNameMap: Record<string, string> = {
+                    'gentle': 'Windykacja Łagodna',
+                    'standard': 'Windykacja Standardowa',
+                    'quick': 'Szybka Eskalacja',
+                };
+                const sequenceName = sequenceNameMap[data.sequence] || 'Windykacja Standardowa';
+
+                const { data: sequences } = await supabase
+                    .from('sequences')
+                    .select('id')
+                    .eq('name', sequenceName)
+                    .eq('is_system', true)
+                    .limit(1);
+
+                if (sequences && sequences.length > 0) {
+                    selectedSequenceId = sequences[0].id;
+                }
+            }
+
+            // 3. Create debtor if provided (with sequence from wizard)
             let createdDebtorId: string | null = null;
             if (data?.debtor && data.debtor.name) {
                 const { data: newDebtor, error: debtorError } = await supabase
@@ -104,6 +126,7 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                         address: data.debtor.address || null,
                         city: data.debtor.city || null,
                         postal_code: data.debtor.postal_code || null,
+                        default_sequence_id: selectedSequenceId,
                     })
                     .select('id')
                     .single();
@@ -116,29 +139,9 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                 }
             }
 
-            // 3. Create invoice if provided AND debtor was created
+            // 4. Create invoice if provided AND debtor was created
             if (data?.invoice && data.invoice.invoice_number && createdDebtorId) {
-                // Get sequence_id from the sequence selected in wizard
-                let sequenceId: string | null = null;
-                if (data?.sequence) {
-                    const sequenceNameMap: Record<string, string> = {
-                        'gentle': 'Windykacja Łagodna',
-                        'standard': 'Windykacja Standardowa',
-                        'quick': 'Szybka Eskalacja',
-                    };
-                    const sequenceName = sequenceNameMap[data.sequence] || 'Windykacja Standardowa';
-
-                    const { data: sequences } = await supabase
-                        .from('sequences')
-                        .select('id')
-                        .eq('name', sequenceName)
-                        .eq('is_system', true)
-                        .limit(1);
-
-                    if (sequences && sequences.length > 0) {
-                        sequenceId = sequences[0].id;
-                    }
-                }
+                // Use the selectedSequenceId we already fetched above
 
                 const dueDate = data.invoice.due_date || new Date().toISOString().split('T')[0];
 
@@ -156,7 +159,7 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                         due_date: dueDate,
                         description: data.invoice.description || null,
                         status: 'pending',
-                        sequence_id: sequenceId,
+                        sequence_id: selectedSequenceId,
                         auto_send_enabled: true,
                     })
                     .select('id')
@@ -165,12 +168,12 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                 if (invoiceError) {
                     console.error('Invoice save error:', invoiceError);
                     // Don't block - invoice is optional
-                } else if (newInvoice && sequenceId) {
+                } else if (newInvoice && selectedSequenceId) {
                     // Generate scheduled steps for the invoice
                     const { data: steps } = await supabase
                         .from('sequence_steps')
                         .select('*')
-                        .eq('sequence_id', sequenceId)
+                        .eq('sequence_id', selectedSequenceId)
                         .order('step_order');
 
                     if (steps && steps.length > 0) {
