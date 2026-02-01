@@ -2,6 +2,13 @@
 -- VindycAItion - Initial Database Schema
 -- ============================================
 
+-- !!! UWAGA: TO USUNIE WSZYSTKIE DANE ZE STAREJ WERSJI !!!
+-- Czyścimy bazę, żeby postawić ją na czysto
+DROP SCHEMA IF EXISTS public CASCADE;
+CREATE SCHEMA public;
+GRANT ALL ON SCHEMA public TO postgres;
+GRANT ALL ON SCHEMA public TO public;
+
 -- USERS AND PROFILES
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -236,11 +243,19 @@ LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
 AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, company_name)
-  VALUES (new.id, new.email, 'Firma ' || split_part(new.email, '@', 1));
+  -- Create profile with NULL company_name to trigger onboarding wizard
+  -- Modules default to BOTH enabled (sales + costs)
+  INSERT INTO public.profiles (id, email, company_name, modules)
+  VALUES (new.id, new.email, NULL, '{"sales": true, "costs": true}'::jsonb)
+  ON CONFLICT (id) DO NOTHING;
   RETURN new;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -672,8 +687,16 @@ Koszty windykacji zostaną doliczone do długu.
 END;
 $$;
 
--- Trigger to create sequences for new users
-CREATE OR REPLACE FUNCTION trigger_create_sequences_for_new_user()
+-- =========================================================
+-- FIXED TRIGGER: Create sequences only AFTER profile exists
+-- =========================================================
+
+-- 1. Drop old triggers on auth.users that were causing the crash
+DROP TRIGGER IF EXISTS on_auth_user_created_sequences ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- 2. Create function to be called on profile creation
+CREATE OR REPLACE FUNCTION trigger_create_sequences_for_new_profile()
 RETURNS TRIGGER 
 LANGUAGE plpgsql
 SET search_path = public
@@ -684,10 +707,25 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS on_auth_user_created_sequences ON auth.users;
-CREATE TRIGGER on_auth_user_created_sequences
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION trigger_create_sequences_for_new_user();
+-- 3. Create trigger on PROFILES table instead
+DROP TRIGGER IF EXISTS on_profile_created_sequences ON public.profiles;
+CREATE TRIGGER on_profile_created_sequences
+    AFTER INSERT ON public.profiles
+    FOR EACH ROW EXECUTE FUNCTION trigger_create_sequences_for_new_profile();
+
+-- ============================================
+-- CRITICAL FIX: Backfill profiles for existing users
+-- Since we dropped the public schema, profiles are gone but auth.users remain.
+-- We must recreate profiles BEFORE creating sequences for them.
+-- ============================================
+INSERT INTO public.profiles (id, email, company_name)
+SELECT 
+    id, 
+    email, 
+    'Firma ' || split_part(email, '@', 1)
+FROM auth.users
+ON CONFLICT (id) DO NOTHING;
+
 
 -- Seed for existing users who don't have sequences yet
 DO $$
@@ -1264,7 +1302,7 @@ WHERE s.id = ss.sequence_id AND s.name = 'Szybka Eskalacja' AND ss.step_order = 
 
 -- Update profiles table with modules configuration
 ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS modules jsonb DEFAULT '{"sales": true, "costs": false}'::jsonb;
+ADD COLUMN IF NOT EXISTS modules jsonb DEFAULT '{"sales": true, "costs": true}'::jsonb;
 
 -- Create cost_invoices table
 CREATE TABLE IF NOT EXISTS public.cost_invoices (

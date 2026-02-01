@@ -26,17 +26,16 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                     return;
                 }
 
-                // Check if profile has onboarding_completed or company_name filled
+                // Check if profile has company data filled
                 const { data: profile } = await supabase
                     .from('profiles')
-                    .select('onboarding_completed, company_name')
+                    .select('onboarding_completed, company_name, company_nip')
                     .eq('id', user.id)
                     .single();
 
-                // Show onboarding only if:
-                // - onboarding_completed is false/null AND
-                // - company_name is not set (means user never completed setup)
-                const needsOnboarding = !profile?.onboarding_completed && !profile?.company_name;
+                // Show onboarding if company_name OR company_nip is missing
+                // This ensures users complete the wizard before using the app
+                const needsOnboarding = !profile?.company_name || !profile?.company_nip;
 
                 setShowOnboarding(needsOnboarding);
             } catch (error) {
@@ -55,23 +54,29 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
             const { data: { user } } = await supabase.auth.getUser();
 
             if (user && data?.company) {
-                // Update profile with company data
+                // Update profile with company data (use UPSERT to create if missing)
                 await supabase
                     .from('profiles')
-                    .update({
+                    .upsert({
+                        id: user.id,
+                        email: user.email, // Ensure email is present for new row
                         company_name: data.company.name,
                         company_nip: data.company.nip,
                         company_address: data.company.address,
                         bank_account_number: data.company.bank_account,
-                        onboarding_completed: true
-                    })
-                    .eq('id', user.id);
+                        country: 'PL', // Default
+                        onboarding_completed: true,
+                        modules: { sales: true, costs: true } // Force enable modules
+                    });
             } else if (user) {
                 // Just mark as complete if skipped or no data
                 await supabase
                     .from('profiles')
-                    .update({ onboarding_completed: true })
-                    .eq('id', user.id);
+                    .upsert({
+                        id: user.id,
+                        email: user.email,
+                        onboarding_completed: true
+                    });
             }
 
             setShowOnboarding(false);
