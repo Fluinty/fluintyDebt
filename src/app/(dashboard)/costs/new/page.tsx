@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ArrowLeft, Loader2, CalendarIcon, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
+import { AddVendorModal } from '@/components/vendors/add-vendor-modal';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -292,13 +293,28 @@ export default function NewCostPage() {
                                                     {vendor.name} {vendor.nip ? `(NIP: ${vendor.nip})` : ''}
                                                 </SelectItem>
                                             ))}
-                                            <div className="p-2 border-t mt-2">
-                                                <Link href="/vendors/new" target="_blank" className="flex items-center gap-2 text-sm text-primary hover:underline justify-center">
-                                                    <Plus className="h-4 w-4" /> Dodaj nowego dostawcę
-                                                </Link>
-                                            </div>
                                         </SelectContent>
                                     </Select>
+                                    <AddVendorModal
+                                        onVendorCreated={(newVendor) => {
+                                            setVendors(prev => [...prev, newVendor].sort((a, b) => a.name.localeCompare(b.name)));
+                                            setSelectedVendorId(newVendor.id);
+                                            setValue('vendor_id', newVendor.id);
+                                            setValue('contractor_name', newVendor.name, { shouldValidate: true });
+                                            setValue('contractor_nip', newVendor.nip || '', { shouldValidate: true });
+                                            if (newVendor.bank_account_number) {
+                                                setValue('account_number', newVendor.bank_account_number);
+                                            }
+                                            if (newVendor.bank_name) {
+                                                setValue('bank_name', newVendor.bank_name);
+                                            }
+                                        }}
+                                        trigger={
+                                            <button type="button" className="flex items-center gap-2 text-sm text-primary hover:underline mt-2">
+                                                <Plus className="h-4 w-4" /> Dodaj nowego dostawcę
+                                            </button>
+                                        }
+                                    />
 
                                     {/* Hidden fields actually submitted */}
                                     <input type="hidden" {...register('contractor_name')} />

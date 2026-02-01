@@ -118,7 +118,31 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
 
             // 3. Create invoice if provided AND debtor was created
             if (data?.invoice && data.invoice.invoice_number && createdDebtorId) {
-                const { error: invoiceError } = await supabase
+                // Get sequence_id from the sequence selected in wizard
+                let sequenceId: string | null = null;
+                if (data?.sequence) {
+                    const sequenceNameMap: Record<string, string> = {
+                        'gentle': 'Windykacja Łagodna',
+                        'standard': 'Windykacja Standardowa',
+                        'quick': 'Szybka Eskalacja',
+                    };
+                    const sequenceName = sequenceNameMap[data.sequence] || 'Windykacja Standardowa';
+
+                    const { data: sequences } = await supabase
+                        .from('sequences')
+                        .select('id')
+                        .eq('name', sequenceName)
+                        .eq('is_system', true)
+                        .limit(1);
+
+                    if (sequences && sequences.length > 0) {
+                        sequenceId = sequences[0].id;
+                    }
+                }
+
+                const dueDate = data.invoice.due_date || new Date().toISOString().split('T')[0];
+
+                const { data: newInvoice, error: invoiceError } = await supabase
                     .from('invoices')
                     .insert({
                         user_id: user.id,
@@ -129,14 +153,49 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                         vat_rate: data.invoice.vat_rate || '23',
                         amount_gross: parseFloat(data.invoice.amount_gross) || 0,
                         issue_date: data.invoice.issue_date || new Date().toISOString().split('T')[0],
-                        due_date: data.invoice.due_date || new Date().toISOString().split('T')[0],
+                        due_date: dueDate,
                         description: data.invoice.description || null,
                         status: 'pending',
-                    });
+                        sequence_id: sequenceId,
+                        auto_send_enabled: true,
+                    })
+                    .select('id')
+                    .single();
 
                 if (invoiceError) {
                     console.error('Invoice save error:', invoiceError);
                     // Don't block - invoice is optional
+                } else if (newInvoice && sequenceId) {
+                    // Generate scheduled steps for the invoice
+                    const { data: steps } = await supabase
+                        .from('sequence_steps')
+                        .select('*')
+                        .eq('sequence_id', sequenceId)
+                        .order('step_order');
+
+                    if (steps && steps.length > 0) {
+                        const dueDateObj = new Date(dueDate);
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+
+                        const scheduledSteps = steps
+                            .map((step: any) => {
+                                const scheduledDate = new Date(dueDateObj);
+                                scheduledDate.setDate(scheduledDate.getDate() + step.days_offset);
+                                return {
+                                    invoice_id: newInvoice.id,
+                                    sequence_step_id: step.id,
+                                    scheduled_date: scheduledDate.toISOString().split('T')[0],
+                                    scheduled_time: '10:00',
+                                    status: scheduledDate < today ? 'skipped' : 'pending',
+                                };
+                            })
+                            .filter((s: any) => s.status === 'pending');
+
+                        if (scheduledSteps.length > 0) {
+                            await supabase.from('scheduled_steps').insert(scheduledSteps);
+                        }
+                    }
                 }
             }
 
