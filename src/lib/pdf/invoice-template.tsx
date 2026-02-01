@@ -274,7 +274,7 @@ export const InvoicePDF = ({ data, items = [] }: InvoicePDFProps) => {
                 </View>
 
                 <Text style={styles.footer}>
-                    Dokument wygenerowany automatycznie przez system VindycAItion z danych KSeF.
+                    Dokument wygenerowany automatycznie przez system FluintyDebt z danych KSeF.
                 </Text>
             </Page>
         </Document>

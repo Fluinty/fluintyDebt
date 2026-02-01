@@ -74,7 +74,7 @@ export default function SubscriptionExpiredPage() {
                         Twój okres próbny dobiegł końca 🔒
                     </h1>
                     <p className="text-xl text-slate-600 max-w-2xl mx-auto">
-                        Mamy nadzieję, że VindycAItion pomogło Ci zapanować nad finansami.
+                        Mamy nadzieję, że FluintyDebt pomogło Ci zapanować nad finansami.
                         Wybierz plan, aby odzyskać dostęp do Dashboardu i automatycznej windykacji.
                     </p>
                 </div>

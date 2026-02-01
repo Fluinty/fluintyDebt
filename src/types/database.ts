@@ -1,4 +1,4 @@
-// Database types for VindycAItion
+// Database types for FluintyDebt
 // These types mirror the Supabase database schema
 
 export type Json =

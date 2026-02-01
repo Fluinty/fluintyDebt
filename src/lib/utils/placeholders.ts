@@ -6,13 +6,14 @@ export const PLACEHOLDERS = {
     '{{debtor_name}}': 'Nazwa kontrahenta',
     '{{invoice_number}}': 'Numer faktury',
     '{{amount}}': 'Kwota faktury',
-    '{{amount_with_interest}}': 'Kwota z odsetkami',
-    '{{interest_amount}}': 'Kwota odsetek',
     '{{due_date}}': 'Termin płatności',
     '{{days_overdue}}': 'Dni po terminie',
     '{{company_name}}': 'Nazwa Twojej firmy',
     '{{bank_account}}': 'Numer konta bankowego',
     '{{payment_link}}': 'Link do płatności online',
+    // Interest placeholders - Coming Soon:
+    // '{{amount_with_interest}}': 'Kwota z odsetkami',
+    // '{{interest_amount}}': 'Kwota odsetek',
 } as const;
 
 export type PlaceholderKey = keyof typeof PLACEHOLDERS;

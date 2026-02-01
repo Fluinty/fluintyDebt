@@ -135,18 +135,7 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                                     <p className="text-sm text-red-600">{formatOverdueDays(daysOverdue)}</p>
                                 )}
                             </div>
-                            {interest.interest > 0 && (
-                                <>
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Naliczone odsetki</p>
-                                        <p className="font-medium text-amber-600">{formatCurrency(interest.interest)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Razem z odsetkami</p>
-                                        <p className="font-bold text-lg">{formatCurrency(interest.total)}</p>
-                                    </div>
-                                </>
-                            )}
+                            {/* Interest section hidden - Coming Soon */}
                             {invoice.description && (
                                 <div className="col-span-2">
                                     <p className="text-sm text-muted-foreground">Opis</p>

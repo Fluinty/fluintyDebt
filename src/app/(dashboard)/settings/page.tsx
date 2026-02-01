@@ -325,26 +325,31 @@ export default function SettingsPage() {
                         </CardContent>
                     </Card>
 
-                    <Card>
+                    <Card className="relative">
                         <CardHeader>
-                            <CardTitle>Stopa odsetek</CardTitle>
+                            <div className="flex items-center gap-2">
+                                <CardTitle>Stopa odsetek</CardTitle>
+                                <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                                    Coming Soon
+                                </span>
+                            </div>
                             <CardDescription>
                                 Roczna stopa odsetek za opóźnienie w płatnościach
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-4 opacity-50 pointer-events-none">
                                 <Input
                                     type="number"
                                     step="0.1"
-                                    value={profile.interest_rate}
-                                    onChange={(e) => setProfile({ ...profile, interest_rate: parseFloat(e.target.value) })}
+                                    value={15.5}
+                                    disabled
                                     className="w-32"
                                 />
                                 <span className="text-muted-foreground">% rocznie</span>
                             </div>
                             <p className="text-xs text-muted-foreground mt-2">
-                                Aktualna stopa ustawowa: 15,5% (styczeń 2026)
+                                Funkcjonalność naliczania odsetek będzie dostępna wkrótce
                             </p>
                         </CardContent>
                     </Card>

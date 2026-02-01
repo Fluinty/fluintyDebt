@@ -206,13 +206,7 @@ export function Header({ user, profile }: HeaderProps) {
                         >
                             Sekwencje
                         </Link>
-                        <Link
-                            href="/ai-generator"
-                            className="block py-2 text-sm font-medium"
-                            onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                            Generator AI
-                        </Link>
+                        {/* AI Generator hidden - Coming later */}
                         <Link
                             href="/settings"
                             className="block py-2 text-sm font-medium"

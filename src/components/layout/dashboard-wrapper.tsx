@@ -53,45 +53,141 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
             const supabase = createClient();
             const { data: { user } } = await supabase.auth.getUser();
 
-            if (user && data?.company) {
-                // Update profile with company data (use UPSERT to create if missing)
-                const { error } = await supabase
-                    .from('profiles')
-                    .upsert({
-                        id: user.id,
-                        email: user.email, // Ensure email is present for new row
-                        company_name: data.company.name,
-                        company_nip: data.company.nip,
-                        company_address: data.company.address,
-                        bank_account_number: data.company.bank_account,
-                        country: 'PL', // Default
-                        onboarding_completed: true,
-                        modules: { sales: true, costs: true } // Force enable modules
-                    });
+            if (!user) {
+                setShowOnboarding(false);
+                return;
+            }
 
-                if (error) {
-                    console.error('UPSERT ERROR:', error);
-                    alert(`Błąd zapisu profilu: ${error.message}`);
-                    return; // Don't close wizard if failed
-                }
-            } else if (user) {
-                // Just mark as complete if skipped or no data
-                const { error } = await supabase
+            // 1. Save company data to profile
+            if (data?.company) {
+                const { error: profileError } = await supabase
                     .from('profiles')
                     .upsert({
                         id: user.id,
                         email: user.email,
-                        onboarding_completed: true
+                        company_name: data.company.name,
+                        company_nip: data.company.nip,
+                        company_address: data.company.address,
+                        company_city: data.company.city,
+                        company_postal_code: data.company.postal_code,
+                        bank_account_number: data.company.bank_account,
+                        country: 'PL',
+                        onboarding_completed: true,
+                        modules: { sales: true, costs: true }
                     });
 
-                if (error) {
-                    console.error('UPSERT ERROR (skip):', error);
-                    alert(`Błąd zapisu profilu: ${error.message}`);
+                if (profileError) {
+                    console.error('Profile save error:', profileError);
+                    alert(`Błąd zapisu profilu: ${profileError.message}`);
                     return;
+                }
+            } else {
+                // Just mark as complete if skipped
+                await supabase.from('profiles').upsert({
+                    id: user.id,
+                    email: user.email,
+                    onboarding_completed: true
+                });
+            }
+
+            // 2. Create debtor if provided
+            let createdDebtorId: string | null = null;
+            if (data?.debtor && data.debtor.name) {
+                const { data: newDebtor, error: debtorError } = await supabase
+                    .from('debtors')
+                    .insert({
+                        user_id: user.id,
+                        name: data.debtor.name,
+                        nip: data.debtor.nip || null,
+                        email: data.debtor.email || null,
+                        phone: data.debtor.phone || null,
+                        address: data.debtor.address || null,
+                        city: data.debtor.city || null,
+                        postal_code: data.debtor.postal_code || null,
+                    })
+                    .select('id')
+                    .single();
+
+                if (debtorError) {
+                    console.error('Debtor save error:', debtorError);
+                    // Don't block - debtor is optional
+                } else {
+                    createdDebtorId = newDebtor?.id;
+                }
+            }
+
+            // 3. Create invoice if provided AND debtor was created
+            if (data?.invoice && data.invoice.invoice_number && createdDebtorId) {
+                const { error: invoiceError } = await supabase
+                    .from('invoices')
+                    .insert({
+                        user_id: user.id,
+                        debtor_id: createdDebtorId,
+                        invoice_number: data.invoice.invoice_number,
+                        amount: parseFloat(data.invoice.amount_gross) || 0,
+                        amount_net: parseFloat(data.invoice.amount_net) || 0,
+                        vat_rate: data.invoice.vat_rate || '23',
+                        amount_gross: parseFloat(data.invoice.amount_gross) || 0,
+                        issue_date: data.invoice.issue_date || new Date().toISOString().split('T')[0],
+                        due_date: data.invoice.due_date || new Date().toISOString().split('T')[0],
+                        description: data.invoice.description || null,
+                        status: 'pending',
+                    });
+
+                if (invoiceError) {
+                    console.error('Invoice save error:', invoiceError);
+                    // Don't block - invoice is optional
+                }
+            }
+
+            // 4. Save KSeF settings if provided
+            if (data?.ksef && data.ksef.token && !data.ksef.skipSetup) {
+                const { error: ksefError } = await supabase
+                    .from('user_ksef_settings')
+                    .upsert({
+                        user_id: user.id,
+                        nip: data.ksef.nip || data.company?.nip,
+                        ksef_token_encrypted: data.ksef.token, // In production, encrypt this
+                        is_enabled: true,
+                        environment: 'test', // Default to test
+                    });
+
+                if (ksefError) {
+                    console.error('KSeF save error:', ksefError);
+                    // Don't block
+                }
+            }
+
+            // 5. Set default sequence (find matching sequence and update profile)
+            if (data?.sequence) {
+                // Map wizard sequence choice to actual sequence names
+                const sequenceNameMap: Record<string, string> = {
+                    'gentle': 'Windykacja Łagodna',
+                    'standard': 'Windykacja Standardowa',
+                    'quick': 'Szybka Eskalacja',
+                };
+
+                const sequenceName = sequenceNameMap[data.sequence] || 'Windykacja Standardowa';
+
+                // Find matching system sequence
+                const { data: sequences } = await supabase
+                    .from('sequences')
+                    .select('id')
+                    .eq('name', sequenceName)
+                    .eq('is_system', true)
+                    .limit(1);
+
+                if (sequences && sequences.length > 0) {
+                    await supabase
+                        .from('profiles')
+                        .update({ default_sequence_id: sequences[0].id })
+                        .eq('id', user.id);
                 }
             }
 
             setShowOnboarding(false);
+            // Refresh page to show new data
+            window.location.reload();
         } catch (error) {
             console.error('Error updating onboarding status:', error);
             alert(`Nieoczekiwany błąd: ${error}`);

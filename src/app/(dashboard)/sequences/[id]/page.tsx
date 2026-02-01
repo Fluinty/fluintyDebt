@@ -512,12 +512,15 @@ export default function SequenceEditorPage() {
                                                 />
                                                 <Label>Dołącz link do płatności</Label>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 opacity-50">
                                                 <Switch
-                                                    checked={selectedStep.include_interest}
-                                                    onCheckedChange={(v) => updateStep({ include_interest: v })}
+                                                    checked={false}
+                                                    disabled
                                                 />
-                                                <Label>Dołącz naliczone odsetki</Label>
+                                                <Label className="flex items-center gap-2">
+                                                    Dołącz naliczone odsetki
+                                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800 rounded">Soon</span>
+                                                </Label>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Switch
@@ -531,7 +534,7 @@ export default function SequenceEditorPage() {
                                         <div className="bg-muted/50 p-4 rounded-lg mt-4">
                                             <p className="text-sm font-medium mb-2">Dostępne zmienne (do użycia w szablonach):</p>
                                             <div className="flex flex-wrap gap-2">
-                                                {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}', '{{company_name}}', '{{amount_with_interest}}', '{{interest_amount}}'].map((ph) => (
+                                                {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{due_date}}', '{{days_overdue}}', '{{payment_link}}', '{{company_name}}'].map((ph) => (
                                                     <Badge key={ph} variant="secondary" className="font-mono text-xs cursor-copy hover:bg-muted-foreground/20">
                                                         {ph}
                                                     </Badge>

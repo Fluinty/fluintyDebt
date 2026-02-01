@@ -11,7 +11,6 @@ import {
     Edit,
     TrendingDown,
     Lock,
-    Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/format-currency';
@@ -267,7 +266,7 @@ export default async function DashboardPage() {
     const monthlyReceivablesData = generateMonthlyReceivables();
     const costTrendData = generateCostTrendData();
 
-    const hasData = invoicesList.length > 0 || debtorsList.length > 0;
+    // Always show full dashboard (removed hasData check)
 
     return (
         <div className="space-y-8">
@@ -307,66 +306,26 @@ export default async function DashboardPage() {
                 </div>
             </div>
 
-            {hasData && (
-                <>
-                    {/* Financial Summary & Balance Widget */}
-                    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                        {/* KPI Cards & Usage Widget */}
-                        <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                            {/* Usage Widget (shows only if limits exist) */}
-                            {subscription && (subscription.sms_limit > 0 || subscription.calls_limit > 0) && (
-                                <div className="lg:col-span-1">
-                                    <UsageWidget
-                                        smsUsed={subscription.sms_used || 0}
-                                        smsLimit={subscription.sms_limit || 0}
-                                        callsUsed={subscription.calls_used || 0}
-                                        callsLimit={subscription.calls_limit || 0}
-                                    />
-                                </div>
-                            )}
+            <>
+                {/* Financial Summary & Balance Widget */}
+                <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+                    {/* KPI Cards & Usage Widget */}
+                    <div className="lg:col-span-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {/* Usage Widget (shows only if limits exist) */}
+                        {subscription && (subscription.sms_limit > 0 || subscription.calls_limit > 0) && (
+                            <div className="lg:col-span-1">
+                                <UsageWidget
+                                    smsUsed={subscription.sms_used || 0}
+                                    smsLimit={subscription.sms_limit || 0}
+                                    callsUsed={subscription.calls_used || 0}
+                                    callsLimit={subscription.calls_limit || 0}
+                                />
+                            </div>
+                        )}
 
-                            <Link href="/invoices" className="block transition-transform hover:scale-[1.01]">
-                                <Card className="relative overflow-hidden h-full">
-                                    {!showSales && (
-                                        <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                            <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                                <Lock className="h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">Do odzyskania</CardTitle>
-                                        <TrendingUp className="h-4 w-4 text-emerald-500" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceivables)}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">{unpaidInvoices.length} faktur sprzedaży</p>
-                                    </CardContent>
-                                </Card>
-                            </Link>
-
-                            <Link href="/costs" className="block transition-transform hover:scale-[1.01]">
-                                <Card className="relative overflow-hidden h-full">
-                                    {!showCosts && (
-                                        <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                            <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                                <Lock className="h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                        </div>
-                                    )}
-                                    <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                        <CardTitle className="text-sm font-medium text-muted-foreground">Do zapłaty</CardTitle>
-                                        <TrendingDown className="h-4 w-4 text-red-500" />
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalPayables)}</div>
-                                        <p className="text-xs text-muted-foreground mt-1">{costInvoicesList.filter(c => c.payment_status !== 'paid').length} faktur kosztowych</p>
-                                    </CardContent>
-                                </Card>
-                            </Link>
-
-                            <Card className="relative overflow-hidden">
-                                {(!showSales || !showCosts) && (
+                        <Link href="/invoices" className="block transition-transform hover:scale-[1.01]">
+                            <Card className="relative overflow-hidden h-full">
+                                {!showSales && (
                                     <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
                                         <div className="bg-background/80 p-2 rounded-full shadow-sm">
                                             <Lock className="h-4 w-4 text-muted-foreground" />
@@ -374,109 +333,38 @@ export default async function DashboardPage() {
                                     </div>
                                 )}
                                 <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                    <CardTitle className="text-sm font-medium text-muted-foreground">Bilans (Netto)</CardTitle>
-                                    <Clock className="h-4 w-4 text-blue-500" />
+                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do odzyskania</CardTitle>
+                                    <TrendingUp className="h-4 w-4 text-emerald-500" />
                                 </CardHeader>
                                 <CardContent>
-                                    <div className={`text-2xl font-bold ${totalReceivables - totalPayables >= 0 ? 'text-primary' : 'text-red-500'}`}>
-                                        {formatCurrency(totalReceivables - totalPayables)}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">Należności - Zobowiązania</p>
+                                    <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalReceivables)}</div>
+                                    <p className="text-xs text-muted-foreground mt-1">{unpaidInvoices.length} faktur sprzedaży</p>
                                 </CardContent>
                             </Card>
-                        </div>
+                        </Link>
 
-
-                    </div>
-
-
-                    {/* Missing Data Alerts (Email/Phone gaps) */}
-                    <MissingDataAlerts
-                        debtors={debtorsList.map(d => ({
-                            id: d.id,
-                            name: d.name,
-                            missingEmail: !d.email,
-                            missingPhone: !d.phone // We check phones now too
-                        }))}
-                    />
-
-                    {/* Action items */}
-                    {actionItems.length > 0 && (
-                        <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 relative overflow-hidden">
-                            {!showSales && (
-                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
-                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Lock className="h-4 w-4 text-muted-foreground" />
+                        <Link href="/costs" className="block transition-transform hover:scale-[1.01]">
+                            <Card className="relative overflow-hidden h-full">
+                                {!showCosts && (
+                                    <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                        <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                            <Lock className="h-4 w-4 text-muted-foreground" />
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                            <CardHeader className="pb-3">
-                                <div className="flex items-center gap-2">
-                                    <AlertTriangle className="h-5 w-5 text-amber-500" />
-                                    <CardTitle className="text-lg">Akcje do wykonania</CardTitle>
-                                </div>
-                                <CardDescription>
-                                    {actionItems.length} elementów wymaga Twojej uwagi
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {actionItems.slice(0, 6).map((item) => (
-                                        <Link key={item.id} href={item.link}>
-                                            <div className="flex items-center gap-3 p-3 bg-background rounded-lg border hover:border-primary/50 transition-colors">
-                                                <div className={`p-2 rounded-full bg-muted ${item.color}`}>
-                                                    <item.icon className="h-4 w-4" />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium">{item.title}</p>
-                                                    <p className="text-xs text-muted-foreground truncate">{item.description}</p>
-                                                </div>
-                                                <Edit className="h-4 w-4 text-muted-foreground" />
-                                            </div>
-                                        </Link>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                                )}
+                                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                    <CardTitle className="text-sm font-medium text-muted-foreground">Do zapłaty</CardTitle>
+                                    <TrendingDown className="h-4 w-4 text-red-500" />
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">{formatCurrency(totalPayables)}</div>
+                                    <p className="text-xs text-muted-foreground mt-1">{costInvoicesList.filter(c => c.payment_status !== 'paid').length} faktur kosztowych</p>
+                                </CardContent>
+                            </Card>
+                        </Link>
 
-                    {/* Charts Grid: Receivables & Cost Trend */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        <div className="relative rounded-xl">
-                            {!showSales && (
-                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Lock className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                </div>
-                            )}
-                            <ReceivablesChart
-                                data={monthlyReceivablesData}
-                                dailyData={dailyReceivablesData}
-                                weeklyData={weeklyReceivablesData}
-                            />
-                        </div>
-
-                        {/* Cost Trend (reused from Reports) */}
-                        <div className="relative rounded-xl">
-                            {!showCosts && (
-                                <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                                    <div className="bg-background/80 p-2 rounded-full shadow-sm">
-                                        <Lock className="h-4 w-4 text-muted-foreground" />
-                                    </div>
-                                </div>
-                            )}
-                            <CostTrendChart
-                                data={costTrendData}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Urgent Invoices & Upcoming Week */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {/* Urgent Invoices */}
-                        <Card className="h-full relative overflow-hidden">
-                            {!showSales && (
+                        <Card className="relative overflow-hidden">
+                            {(!showSales || !showCosts) && (
                                 <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
                                     <div className="bg-background/80 p-2 rounded-full shadow-sm">
                                         <Lock className="h-4 w-4 text-muted-foreground" />
@@ -484,64 +372,152 @@ export default async function DashboardPage() {
                                 </div>
                             )}
                             <CardHeader className="flex flex-row items-center justify-between pb-2">
-                                <CardTitle className="text-lg">Pilne faktury</CardTitle>
-                                <Link href="/invoices">
-                                    <Button variant="ghost" size="sm">Wszystkie <ArrowRight className="ml-2 h-4 w-4" /></Button>
-                                </Link>
+                                <CardTitle className="text-sm font-medium text-muted-foreground">Bilans (Netto)</CardTitle>
+                                <Clock className="h-4 w-4 text-blue-500" />
                             </CardHeader>
-                            <CardContent className="space-y-4">
-                                {urgentInvoices.length > 0 ? (
-                                    urgentInvoices.map((invoice) => (
-                                        <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
-                                            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
-                                                <div>
-                                                    <p className="font-medium">{invoice.invoice_number}</p>
-                                                    <p className="text-sm text-muted-foreground">{(invoice.debtors as any)?.name}</p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
-                                                    <StatusBadge status={invoice.calculatedStatus} />
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ))
-                                ) : (
-                                    <p className="text-sm text-muted-foreground text-center py-4">Brak pilnych faktur</p>
-                                )}
+                            <CardContent>
+                                <div className={`text-2xl font-bold ${totalReceivables - totalPayables >= 0 ? 'text-primary' : 'text-red-500'}`}>
+                                    {formatCurrency(totalReceivables - totalPayables)}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">Należności - Zobowiązania</p>
                             </CardContent>
                         </Card>
-
-                        {/* Upcoming Week */}
-                        <div>
-                            <UpcomingWeek
-                                salesInvoices={upcomingSalesInvoices}
-                                costInvoices={upcomingCostInvoices}
-                            />
-                        </div>
                     </div>
-                </>
-            )
-            }
 
-            {
-                !hasData && (
-                    <Card className="py-12 bg-gradient-to-br from-primary/5 to-primary/10">
-                        <CardContent className="text-center">
-                            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-                                <Sparkles className="h-10 w-10 text-primary" />
+
+                </div>
+
+
+                {/* Missing Data Alerts (Email/Phone gaps) */}
+                <MissingDataAlerts
+                    debtors={debtorsList.map(d => ({
+                        id: d.id,
+                        name: d.name,
+                        missingEmail: !d.email,
+                        missingPhone: !d.phone // We check phones now too
+                    }))}
+                />
+
+                {/* Action items */}
+                {actionItems.length > 0 && (
+                    <Card className="border-amber-200 dark:border-amber-900 bg-amber-50/50 dark:bg-amber-950/20 relative overflow-hidden">
+                        {!showSales && (
+                            <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                    <Lock className="h-4 w-4 text-muted-foreground" />
+                                </div>
                             </div>
-                            <h2 className="text-2xl font-bold mb-2">Witaj w VindycAItion!</h2>
-                            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                                Zacznij od dodania faktur, aby zobaczyć analizy.
-                            </p>
-                            <div className="flex justify-center gap-4">
-                                {showSales && <Link href="/invoices/new"><Button>Dodaj fakturę</Button></Link>}
-                                {showCosts && <Link href="/costs/new"><Button variant="outline">Dodaj koszt</Button></Link>}
+                        )}
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                                <CardTitle className="text-lg">Akcje do wykonania</CardTitle>
+                            </div>
+                            <CardDescription>
+                                {actionItems.length} elementów wymaga Twojej uwagi
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {actionItems.slice(0, 6).map((item) => (
+                                    <Link key={item.id} href={item.link}>
+                                        <div className="flex items-center gap-3 p-3 bg-background rounded-lg border hover:border-primary/50 transition-colors">
+                                            <div className={`p-2 rounded-full bg-muted ${item.color}`}>
+                                                <item.icon className="h-4 w-4" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium">{item.title}</p>
+                                                <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                                            </div>
+                                            <Edit className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                    </Link>
+                                ))}
                             </div>
                         </CardContent>
                     </Card>
-                )
-            }
+                )}
+
+                {/* Charts Grid: Receivables & Cost Trend */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="relative rounded-xl">
+                        {!showSales && (
+                            <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                                <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                    <Lock className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                            </div>
+                        )}
+                        <ReceivablesChart
+                            data={monthlyReceivablesData}
+                            dailyData={dailyReceivablesData}
+                            weeklyData={weeklyReceivablesData}
+                        />
+                    </div>
+
+                    {/* Cost Trend (reused from Reports) */}
+                    <div className="relative rounded-xl">
+                        {!showCosts && (
+                            <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center rounded-xl">
+                                <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                    <Lock className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                            </div>
+                        )}
+                        <CostTrendChart
+                            data={costTrendData}
+                        />
+                    </div>
+                </div>
+
+                {/* Urgent Invoices & Upcoming Week */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Urgent Invoices */}
+                    <Card className="h-full relative overflow-hidden">
+                        {!showSales && (
+                            <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-sm flex items-center justify-center">
+                                <div className="bg-background/80 p-2 rounded-full shadow-sm">
+                                    <Lock className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                            </div>
+                        )}
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-lg">Pilne faktury</CardTitle>
+                            <Link href="/invoices">
+                                <Button variant="ghost" size="sm">Wszystkie <ArrowRight className="ml-2 h-4 w-4" /></Button>
+                            </Link>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {urgentInvoices.length > 0 ? (
+                                urgentInvoices.map((invoice) => (
+                                    <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
+                                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                                            <div>
+                                                <p className="font-medium">{invoice.invoice_number}</p>
+                                                <p className="text-sm text-muted-foreground">{(invoice.debtors as any)?.name}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                                <StatusBadge status={invoice.calculatedStatus} />
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground text-center py-4">Brak pilnych faktur</p>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Upcoming Week */}
+                    <div>
+                        <UpcomingWeek
+                            salesInvoices={upcomingSalesInvoices}
+                            costInvoices={upcomingCostInvoices}
+                        />
+                    </div>
+                </div>
+            </>
         </div >
     );
 }

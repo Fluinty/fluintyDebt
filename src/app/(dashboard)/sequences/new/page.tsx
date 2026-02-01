@@ -32,8 +32,6 @@ const VariableList = () => (
                 { label: 'Dłużnik', value: '{{debtor_name}}' },
                 { label: 'Nr faktury', value: '{{invoice_number}}' },
                 { label: 'Kwota', value: '{{amount}}' },
-                { label: 'Kwota z odsetkami', value: '{{amount_with_interest}}' },
-                { label: 'Odsetki', value: '{{interest_amount}}' },
                 { label: 'Termin', value: '{{due_date}}' },
                 { label: 'Dni po terminie', value: '{{days_overdue}}' },
                 { label: 'Twoja firma', value: '{{company_name}}' },
@@ -478,12 +476,15 @@ export default function NewSequencePage() {
                                                 />
                                                 <Label>Dołącz link do płatności</Label>
                                             </div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 opacity-50">
                                                 <Switch
-                                                    checked={selectedStep.include_interest}
-                                                    onCheckedChange={(v) => updateSelectedStep({ include_interest: v })}
+                                                    checked={false}
+                                                    disabled
                                                 />
-                                                <Label>Dołącz naliczone odsetki</Label>
+                                                <Label className="flex items-center gap-2">
+                                                    Dołącz naliczone odsetki
+                                                    <span className="px-1.5 py-0.5 text-[10px] font-medium bg-amber-100 text-amber-800 rounded">Soon</span>
+                                                </Label>
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Switch

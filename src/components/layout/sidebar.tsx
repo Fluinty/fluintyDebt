@@ -84,7 +84,7 @@ const navigation: NavGroup[] = [
     {
         title: "NARZĘDZIA",
         items: [
-            { name: 'Generator AI', href: '/ai-generator', icon: Sparkles },
+            // { name: 'Generator AI', href: '/ai-generator', icon: Sparkles }, // Hidden - Coming later
             { name: 'Historia', href: '/history', icon: History },
             { name: 'Ustawienia', href: '/settings', icon: Settings },
         ],

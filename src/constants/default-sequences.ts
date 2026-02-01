@@ -1,5 +1,5 @@
 /**
- * Default collection sequences for VindycAItion
+ * Default collection sequences for FluintyDebt
  * These templates are created for each new user during registration
  */
 
