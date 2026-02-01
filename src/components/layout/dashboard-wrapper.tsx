@@ -55,7 +55,7 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
 
             if (user && data?.company) {
                 // Update profile with company data (use UPSERT to create if missing)
-                await supabase
+                const { error } = await supabase
                     .from('profiles')
                     .upsert({
                         id: user.id,
@@ -68,20 +68,33 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                         onboarding_completed: true,
                         modules: { sales: true, costs: true } // Force enable modules
                     });
+
+                if (error) {
+                    console.error('UPSERT ERROR:', error);
+                    alert(`Błąd zapisu profilu: ${error.message}`);
+                    return; // Don't close wizard if failed
+                }
             } else if (user) {
                 // Just mark as complete if skipped or no data
-                await supabase
+                const { error } = await supabase
                     .from('profiles')
                     .upsert({
                         id: user.id,
                         email: user.email,
                         onboarding_completed: true
                     });
+
+                if (error) {
+                    console.error('UPSERT ERROR (skip):', error);
+                    alert(`Błąd zapisu profilu: ${error.message}`);
+                    return;
+                }
             }
 
             setShowOnboarding(false);
         } catch (error) {
             console.error('Error updating onboarding status:', error);
+            alert(`Nieoczekiwany błąd: ${error}`);
             setShowOnboarding(false);
         }
     };

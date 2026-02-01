@@ -14,8 +14,8 @@ CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   full_name TEXT,
-  -- Company data
-  company_name TEXT NOT NULL,
+  -- Company data (NULL = triggers onboarding wizard)
+  company_name TEXT,
   company_nip TEXT,
   company_address TEXT,
   company_city TEXT,
@@ -29,6 +29,16 @@ CREATE TABLE profiles (
   default_sequence_id UUID,
   send_thank_you_on_payment BOOLEAN DEFAULT TRUE,
   interest_rate DECIMAL(5,4) DEFAULT 0.155,
+  -- Onboarding & Feature Flags
+  onboarding_completed BOOLEAN DEFAULT FALSE,
+  ksef_setup_skipped BOOLEAN DEFAULT FALSE,
+  modules jsonb DEFAULT '{"sales": true, "costs": true}'::jsonb,
+  current_balance NUMERIC DEFAULT 0,
+  sms_enabled BOOLEAN DEFAULT FALSE,
+  voice_enabled BOOLEAN DEFAULT FALSE,
+  thank_you_email_subject TEXT,
+  thank_you_email_body TEXT,
+  country TEXT DEFAULT 'PL',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -205,8 +215,11 @@ ALTER TABLE installments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE collection_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE scheduled_steps ENABLE ROW LEVEL SECURITY;
 
--- POLICIES
-CREATE POLICY "Users can view own profile" ON profiles FOR ALL USING (auth.uid() = id);
+-- POLICIES (profiles needs INSERT + UPDATE + SELECT + DELETE separately)
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Users can delete own profile" ON profiles FOR DELETE USING (auth.uid() = id);
 CREATE POLICY "Users can manage own sequences" ON sequences FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own sequence_steps" ON sequence_steps FOR ALL
   USING (sequence_id IN (SELECT id FROM sequences WHERE user_id = auth.uid()));
@@ -1300,9 +1313,7 @@ This is your last opportunity to resolve this matter amicably.
 FROM sequences s
 WHERE s.id = ss.sequence_id AND s.name = 'Szybka Eskalacja' AND ss.step_order = 8;
 
--- Update profiles table with modules configuration
-ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS modules jsonb DEFAULT '{"sales": true, "costs": true}'::jsonb;
+-- (Modules column already defined in CREATE TABLE above)
 
 -- Create cost_invoices table
 CREATE TABLE IF NOT EXISTS public.cost_invoices (
