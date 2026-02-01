@@ -24,6 +24,10 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
     const { id } = await params;
     const supabase = await createClient();
 
+    // Debug: check auth
+    const { data: { user } } = await supabase.auth.getUser();
+    console.log('[Debtor Page] Current user:', user?.id, 'Looking for debtor:', id);
+
     // Fetch debtor from database with sequence info
     const { data: debtor, error: debtorError } = await supabase
         .from('debtors')
@@ -35,11 +39,11 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
         .single();
 
     if (debtorError) {
-        console.error('[Debtor Page] Query error:', debtorError.message);
+        console.error('[Debtor Page] Query error:', debtorError.message, debtorError.code, debtorError.details);
     }
 
     if (!debtor) {
-        console.error('[Debtor Page] Debtor not found for id:', id);
+        console.error('[Debtor Page] Debtor not found for id:', id, 'User:', user?.id);
         notFound();
     }
 

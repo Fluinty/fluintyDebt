@@ -8,6 +8,9 @@ DROP SCHEMA IF EXISTS public CASCADE;
 CREATE SCHEMA public;
 GRANT ALL ON SCHEMA public TO postgres;
 GRANT ALL ON SCHEMA public TO public;
+GRANT USAGE ON SCHEMA public TO anon;
+GRANT USAGE ON SCHEMA public TO authenticated;
+GRANT USAGE ON SCHEMA public TO service_role;
 
 -- USERS AND PROFILES
 CREATE TABLE profiles (
@@ -231,6 +234,14 @@ CREATE POLICY "Users can manage own installments" ON installments FOR ALL
 CREATE POLICY "Users can manage own actions" ON collection_actions FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "Users can manage own scheduled_steps" ON scheduled_steps FOR ALL
   USING (invoice_id IN (SELECT id FROM invoices WHERE user_id = auth.uid()));
+
+-- TABLE GRANTS for anon and authenticated roles
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
 
 -- TRIGGERS for updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()

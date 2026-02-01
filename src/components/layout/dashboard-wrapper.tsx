@@ -146,10 +146,10 @@ export function DashboardWrapper({ children }: DashboardWrapperProps) {
                     .from('user_ksef_settings')
                     .upsert({
                         user_id: user.id,
-                        nip: data.ksef.nip || data.company?.nip,
+                        ksef_nip: data.ksef.nip || data.company?.nip,
                         ksef_token_encrypted: data.ksef.token, // In production, encrypt this
                         is_enabled: true,
-                        environment: 'test', // Default to test
+                        ksef_environment: 'test', // Default to test
                     });
 
                 if (ksefError) {
