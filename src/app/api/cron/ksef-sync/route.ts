@@ -145,14 +145,14 @@ export async function GET(request: NextRequest) {
                     if (buyerNip) {
                         const { data: existingDebtor } = await supabase
                             .from('debtors')
-                            .select('id, sequence_id')
+                            .select('id, default_sequence_id')
                             .eq('nip', buyerNip)
                             .eq('user_id', settings.user_id)
                             .single();
 
                         if (existingDebtor) {
                             debtorId = existingDebtor.id;
-                            sequenceId = existingDebtor.sequence_id || sequenceId;
+                            sequenceId = existingDebtor.default_sequence_id || sequenceId;
                         } else {
                             const { data: newDebtor } = await supabase
                                 .from('debtors')
@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
                                     user_id: settings.user_id,
                                     name: buyerName,
                                     nip: buyerNip,
-                                    sequence_id: sequenceId,
+                                    default_sequence_id: sequenceId,
                                 })
                                 .select('id')
                                 .single();

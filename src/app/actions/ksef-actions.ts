@@ -553,7 +553,7 @@ export async function syncKSeFInvoices(
                 if (buyerNip) {
                     const { data: existingDebtor } = await supabase
                         .from('debtors')
-                        .select('id, sequence_id')
+                        .select('id, default_sequence_id')
                         .eq('nip', buyerNip)
                         .eq('user_id', user.id)
                         .single();
@@ -561,7 +561,7 @@ export async function syncKSeFInvoices(
                     if (existingDebtor) {
                         debtorId = existingDebtor.id;
                         // Use debtor's sequence if set, otherwise use default
-                        sequenceId = existingDebtor.sequence_id || defaultSequence?.id || null;
+                        sequenceId = existingDebtor.default_sequence_id || defaultSequence?.id || null;
                         console.log('[Sync] Found existing debtor:', debtorId);
                     } else {
                         // Create new debtor with default sequence
@@ -591,7 +591,7 @@ export async function syncKSeFInvoices(
                                 address: gusData.address || null,
                                 city: gusData.city || null,
                                 postal_code: gusData.postal_code || null,
-                                sequence_id: defaultSequence?.id || null,
+                                default_sequence_id: defaultSequence?.id || null,
                             })
                             .select('id')
                             .single();

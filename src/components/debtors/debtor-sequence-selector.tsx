@@ -67,7 +67,7 @@ export function DebtorSequenceSelector({
             const supabase = createClient();
             const { error } = await supabase
                 .from('debtors')
-                .update({ sequence_id: newSequenceId || null })
+                .update({ default_sequence_id: newSequenceId || null })
                 .eq('id', debtorId);
 
             if (error) throw error;

@@ -33,7 +33,7 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
         .from('debtors')
         .select(`
             *,
-            sequences:sequence_id (id, name)
+            sequences:default_sequence_id (id, name)
         `)
         .eq('id', id)
         .single();
@@ -178,7 +178,7 @@ export default async function DebtorDetailsPage({ params }: { params: Promise<{ 
                     {/* Sequence selector */}
                     <DebtorSequenceSelector
                         debtorId={debtor.id}
-                        currentSequenceId={debtor.sequence_id}
+                        currentSequenceId={debtor.default_sequence_id}
                         currentSequenceName={debtor.sequences?.name || null}
                     />
 

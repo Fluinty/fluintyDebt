@@ -29,6 +29,17 @@ export async function createInvoiceWithSchedule(data: {
         return { error: 'Unauthorized' };
     }
 
+    // Determine sequence_id: use provided, or fallback to user's default
+    let effectiveSequenceId = data.sequence_id || null;
+    if (!effectiveSequenceId) {
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('default_sequence_id')
+            .eq('id', user.id)
+            .single();
+        effectiveSequenceId = profile?.default_sequence_id || null;
+    }
+
     // Insert invoice
     const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
@@ -44,7 +55,7 @@ export async function createInvoiceWithSchedule(data: {
             issue_date: data.issue_date,
             due_date: data.due_date,
             description: data.description || null,
-            sequence_id: data.sequence_id || null,
+            sequence_id: effectiveSequenceId,
             status: 'pending',
             auto_send_enabled: data.auto_send_enabled ?? true,
             send_time: data.send_time || '10:00',
@@ -58,11 +69,11 @@ export async function createInvoiceWithSchedule(data: {
     }
 
     // If sequence is assigned, generate scheduled steps
-    if (data.sequence_id) {
+    if (effectiveSequenceId) {
         const { data: steps } = await supabase
             .from('sequence_steps')
             .select('*')
-            .eq('sequence_id', data.sequence_id)
+            .eq('sequence_id', effectiveSequenceId)
             .order('step_order');
 
         if (steps && steps.length > 0) {

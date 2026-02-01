@@ -45,7 +45,7 @@ type InvoiceFormData = z.infer<typeof invoiceSchema>;
 interface Debtor {
     id: string;
     name: string;
-    sequence_id: string | null;
+    default_sequence_id: string | null;
     auto_send_enabled: boolean;
     preferred_send_time: string;
     preferred_channel: string;
@@ -105,7 +105,7 @@ export default function NewInvoicePage() {
 
             const { data: debtorsData } = await supabase
                 .from('debtors')
-                .select('id, name, sequence_id, auto_send_enabled, preferred_send_time, preferred_channel')
+                .select('id, name, default_sequence_id, auto_send_enabled, preferred_send_time, preferred_channel')
                 .order('name');
 
             const { data: sequencesData } = await supabase
@@ -252,8 +252,8 @@ export default function NewInvoicePage() {
                                         // Inherit default settings from debtor
                                         const selectedDebtor = debtors.find(d => d.id === value);
                                         if (selectedDebtor) {
-                                            if (selectedDebtor.sequence_id) {
-                                                setValue('sequence_id', selectedDebtor.sequence_id);
+                                            if (selectedDebtor.default_sequence_id) {
+                                                setValue('sequence_id', selectedDebtor.default_sequence_id);
                                             }
                                             setValue('auto_send_enabled', selectedDebtor.auto_send_enabled ?? true);
                                             setValue('send_time', selectedDebtor.preferred_send_time || '10:00');
