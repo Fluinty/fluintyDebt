@@ -203,6 +203,7 @@ export type Database = {
                     voice_script_en: string | null;
                     include_payment_link: boolean;
                     include_interest: boolean;
+                    attach_invoice: boolean;
                     is_ai_generated: boolean;
                     created_at: string;
                     updated_at: string;
@@ -223,6 +224,7 @@ export type Database = {
                     voice_script_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
+                    attach_invoice?: boolean;
                     is_ai_generated?: boolean;
                     created_at?: string;
                     updated_at?: string;
@@ -243,6 +245,7 @@ export type Database = {
                     voice_script_en?: string | null;
                     include_payment_link?: boolean;
                     include_interest?: boolean;
+                    attach_invoice?: boolean;
                     is_ai_generated?: boolean;
                     created_at?: string;
                     updated_at?: string;

@@ -45,6 +45,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: false,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 2,
@@ -74,6 +75,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 3,
@@ -111,6 +113,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 4,
@@ -146,6 +149,7 @@ This is a final notice before further collection action is taken.
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
     ],
 };
@@ -183,6 +187,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: false,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 2,
@@ -212,6 +217,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 3,
@@ -241,6 +247,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 4,
@@ -275,6 +282,7 @@ Best regards,
 
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 5,
@@ -312,6 +320,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 6,
@@ -347,6 +356,7 @@ Failure to pay within 7 days of receiving this notice will result in the matter 
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
     ],
 };
@@ -380,6 +390,7 @@ Best regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 2,
@@ -405,6 +416,7 @@ URGENT: Invoice {{invoice_number}} for {{amount}} is due tomorrow.
             sms_body_en: 'URGENT: Invoice {{invoice_number}} for {{amount}} is due tomorrow {{due_date}}. {{company_name}}',
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 3,
@@ -428,6 +440,7 @@ Invoice {{invoice_number}} is now overdue. Please make an immediate payment of {
 {{company_name}}`,
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 4,
@@ -460,6 +473,7 @@ Please contact us or make payment immediately.
 
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 5,
@@ -491,6 +505,7 @@ TOTAL: {{amount_with_interest}}
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 6,
@@ -521,6 +536,7 @@ Amount with interest: {{amount_with_interest}}
 
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 7,
@@ -558,6 +574,7 @@ Failure to pay within 3 business days will result in collection proceedings.
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 8,
@@ -590,6 +607,7 @@ This is your last opportunity to resolve this matter amicably.
 
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
     ],
 };
@@ -627,6 +645,7 @@ Regards,
 {{company_name}}`,
             include_payment_link: false,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 2,
@@ -638,6 +657,7 @@ Regards,
             sms_body_en: 'Today is the due date for invoice {{invoice_number}}, amount: {{amount}}. Please pay now. {{company_name}}',
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 3,
@@ -649,6 +669,7 @@ Regards,
             voice_script_en: 'Hello. This is {{company_name}}. We are calling about unpaid invoice {{invoice_number}} for {{amount}}. It is 3 days overdue. Please make a payment.',
             include_payment_link: false,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 4,
@@ -674,6 +695,7 @@ Regards,
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 5,
@@ -685,6 +707,7 @@ Regards,
             sms_body_en: 'URGENT: Invoice {{invoice_number}} ({{amount}}) is still unpaid. Please pay immediately. {{company_name}}',
             include_payment_link: true,
             include_interest: false,
+            attach_invoice: true,
         },
         {
             step_order: 6,
@@ -696,6 +719,7 @@ Regards,
             voice_script_en: 'Good morning. Please settle invoice {{invoice_number}} for {{amount}} immediately. Failure to pay will result in debt collection actions.',
             include_payment_link: false,
             include_interest: true,
+            attach_invoice: true,
         },
         {
             step_order: 7,
@@ -723,6 +747,7 @@ Legal action will be taken.
 {{company_name}}`,
             include_payment_link: true,
             include_interest: true,
+            attach_invoice: true,
         }
     ],
 };
