@@ -67,7 +67,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
 
     const [settings, setSettings] = useState<UserKSeFSettings | null>(null);
     const [formData, setFormData] = useState({
-        ksef_environment: 'test' as KSeFEnvironment,
+        ksef_environment: 'production' as KSeFEnvironment,
         ksef_token: '',
         ksef_nip: companyNip || '',
         is_enabled: false,
@@ -145,7 +145,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
             toast.success('KSeF został rozłączony');
             setSettings(null);
             setFormData({
-                ksef_environment: 'test',
+                ksef_environment: 'production',
                 ksef_token: '',
                 ksef_nip: '',
                 is_enabled: false,
@@ -264,22 +264,44 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {/* Environment info */}
+                    {/* Environment info - dynamic */}
                     <Alert>
                         <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>Środowisko testowe</AlertTitle>
+                        <AlertTitle>
+                            {formData.ksef_environment === 'production'
+                                ? 'Środowisko produkcyjne'
+                                : 'Środowisko testowe'}
+                        </AlertTitle>
                         <AlertDescription>
-                            Zalecamy najpierw przetestować integrację na środowisku testowym KSeF.
-                            <br />
-                            <a
-                                href="https://ksef-test.mf.gov.pl/aplikacja-podatnika-ksef/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
-                            >
-                                Otwórz aplikację testową KSeF
-                                <ExternalLink className="h-3 w-3" />
-                            </a>
+                            {formData.ksef_environment === 'production' ? (
+                                <>
+                                    Używasz <strong>produkcyjnego</strong> środowiska KSeF. Wszystkie operacje będą wykonywane na prawdziwych danych.
+                                    <br />
+                                    <a
+                                        href="https://ksef.mf.gov.pl/web/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
+                                    >
+                                        Otwórz aplikację produkcyjną KSeF
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </>
+                            ) : (
+                                <>
+                                    Zalecamy najpierw przetestować integrację na środowisku testowym KSeF.
+                                    <br />
+                                    <a
+                                        href="https://ksef-test.mf.gov.pl/aplikacja-podatnika-ksef/"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
+                                    >
+                                        Otwórz aplikację testową KSeF
+                                        <ExternalLink className="h-3 w-3" />
+                                    </a>
+                                </>
+                            )}
                         </AlertDescription>
                     </Alert>
 
