@@ -1,5 +1,6 @@
 'use server';
 
+import crypto from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 import { createKSeFClient } from '@/lib/ksef/client';
 import { generateScheduledSteps } from '@/lib/sequences/generate-schedule';
@@ -9,23 +10,59 @@ import { syncKSeFCostInvoices } from '@/app/actions/ksef-costs-actions'; // Impo
 import type { KSeFEnvironment, KSeFSettingsFormData, UserKSeFSettings } from '@/lib/ksef/types';
 
 /**
- * Simple encryption for token storage
- * In production, use Supabase Vault or proper encryption service
+ * AES-256-GCM encryption for token storage
+ * Uses authenticated encryption with random IV for maximum security
  */
 function encryptToken(token: string): string {
-    // Base64 encode with simple obfuscation
-    // TODO: Replace with proper encryption (Supabase Vault)
-    const encoded = Buffer.from(token).toString('base64');
-    return `v1:${encoded}`;
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+    if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64) {
+        throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
+    }
+
+    const algorithm = 'aes-256-gcm';
+    const iv = crypto.randomBytes(16); // Random IV for each encryption
+    const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+
+    const cipher = crypto.createCipheriv(algorithm, key, iv);
+
+    let encrypted = cipher.update(token, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+
+    const authTag = cipher.getAuthTag();
+
+    // Format: v2:iv:authTag:encrypted
+    return `v2:${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
 }
 
 function decryptToken(encryptedToken: string): string {
-    // Reverse the simple obfuscation
-    if (encryptedToken.startsWith('v1:')) {
-        const encoded = encryptedToken.slice(3);
-        return Buffer.from(encoded, 'base64').toString('utf-8');
+    const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+    if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length !== 64) {
+        throw new Error('ENCRYPTION_KEY must be a 64-character hex string (32 bytes)');
     }
-    return encryptedToken;
+
+    const parts = encryptedToken.split(':');
+    const version = parts[0];
+
+    if (version !== 'v2') {
+        throw new Error(`Unsupported encryption version: ${version}`);
+    }
+
+    const [, ivHex, authTagHex, encrypted] = parts;
+
+    const algorithm = 'aes-256-gcm';
+    const key = Buffer.from(ENCRYPTION_KEY, 'hex');
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+
+    const decipher = crypto.createDecipheriv(algorithm, key, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
 }
 
 /**
