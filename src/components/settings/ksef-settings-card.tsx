@@ -69,7 +69,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
     const [formData, setFormData] = useState({
         ksef_environment: 'test' as KSeFEnvironment,
         ksef_token: '',
-        ksef_nip: '',
+        ksef_nip: companyNip || '',
         is_enabled: false,
         sync_frequency: 'daily' as SyncFrequency,
         sync_time: '21:00',
@@ -78,7 +78,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
 
     useEffect(() => {
         loadSettings();
-    }, []);
+    }, [companyNip]);
 
     const loadSettings = async () => {
         setIsLoading(true);
@@ -88,12 +88,18 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
             setFormData({
                 ksef_environment: result.settings.ksef_environment,
                 ksef_token: '', // Don't populate token field
-                ksef_nip: companyNip || result.settings.ksef_nip || '',
+                ksef_nip: result.settings.ksef_nip || companyNip || '',
                 is_enabled: result.settings.is_enabled,
                 sync_frequency: result.settings.sync_frequency,
                 sync_time: result.settings.sync_time || '21:00',
                 auto_confirm_invoices: result.settings.auto_confirm_invoices,
             });
+        } else {
+            // No settings saved yet - populate NIP from profile
+            setFormData(prev => ({
+                ...prev,
+                ksef_nip: companyNip || prev.ksef_nip,
+            }));
         }
         setIsLoading(false);
     };

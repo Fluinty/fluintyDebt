@@ -327,13 +327,16 @@ export default function NewInvoicePage() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="description">Opis (opcjonalnie)</Label>
+                                    <Label htmlFor="description">Pozycje faktury</Label>
                                     <Textarea
                                         id="description"
-                                        placeholder="Dodatkowe informacje o fakturze..."
+                                        placeholder="np.&#10;1. Usługa IT - 3 252,03 zł&#10;2. Rower miejski - 1 000,00 zł"
                                         rows={3}
                                         {...register('description')}
                                     />
+                                    <p className="text-xs text-muted-foreground">
+                                        Opis pozycji z faktury (opcjonalnie)
+                                    </p>
                                 </div>
                             </CardContent>
                         </Card>

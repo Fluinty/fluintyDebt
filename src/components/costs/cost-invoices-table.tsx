@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { Search, ArrowUpDown, ArrowUp, ArrowDown, Receipt, QrCode, MoreHorizontal, Check, Loader2 } from 'lucide-react';
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, QrCode, MoreHorizontal, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -218,14 +218,6 @@ export function CostInvoicesTable({ invoices }: CostInvoicesTableProps) {
                             <SelectItem value="paid">Opłacone</SelectItem>
                         </SelectContent>
                     </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button asChild>
-                        <Link href="/costs/new">
-                            <Receipt className="mr-2 h-4 w-4" />
-                            Dodaj fakturę
-                        </Link>
-                    </Button>
                 </div>
             </div>
 
