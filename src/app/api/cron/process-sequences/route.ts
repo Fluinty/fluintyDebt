@@ -23,30 +23,15 @@ export async function GET(request: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
-    // DEBUG: Log connection details
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-    console.log('[Cron] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log('[Cron] Service Key (start):', key.substring(0, 5) + '...');
-
-    try {
-        const [, payload] = key.split('.');
-        if (payload) {
-            const decoded = JSON.parse(atob(payload));
-            console.log('[Cron] Key Role Claim:', decoded.role);
-            console.log('[Cron] Key Iss (Project):', decoded.iss);
-        } else {
-            console.log('[Cron] Key is not a valid JWT (no payload)');
-        }
-    } catch (e) {
-        console.error('[Cron] Error decoding key:', e);
-    }
-
     const today = new Date().toISOString().split('T')[0];
     const currentTime = new Date().toLocaleTimeString('pl-PL', {
+        timeZone: 'Europe/Warsaw',
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
     });
+
+    console.log(`[Cron] Processing sequences for date <= ${today}, time >= ${currentTime} (PL)`);
 
     // Get all pending scheduled steps for today
     // Join with invoices to check auto_send_enabled and send_time
@@ -66,7 +51,7 @@ export async function GET(request: NextRequest) {
             )
         `)
         .eq('status', 'pending')
-        .eq('scheduled_for', today)
+        .lte('scheduled_for', today)
         .eq('invoices.auto_send_enabled', true)
         .lte('invoices.send_time', currentTime)
         .not('invoices.status', 'in', '(paid,written_off)');
