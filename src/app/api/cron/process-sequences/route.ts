@@ -27,7 +27,19 @@ export async function GET(request: NextRequest) {
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
     console.log('[Cron] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
     console.log('[Cron] Service Key (start):', key.substring(0, 5) + '...');
-    console.log('[Cron] Is Service Key same as Anon?', key === process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
+    try {
+        const [, payload] = key.split('.');
+        if (payload) {
+            const decoded = JSON.parse(atob(payload));
+            console.log('[Cron] Key Role Claim:', decoded.role);
+            console.log('[Cron] Key Iss (Project):', decoded.iss);
+        } else {
+            console.log('[Cron] Key is not a valid JWT (no payload)');
+        }
+    } catch (e) {
+        console.error('[Cron] Error decoding key:', e);
+    }
 
     const today = new Date().toISOString().split('T')[0];
     const currentTime = new Date().toLocaleTimeString('pl-PL', {
