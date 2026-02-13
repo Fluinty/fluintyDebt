@@ -23,6 +23,12 @@ export async function GET(request: NextRequest) {
         process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
 
+    // DEBUG: Log connection details
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+    console.log('[Cron] Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL);
+    console.log('[Cron] Service Key (start):', key.substring(0, 5) + '...');
+    console.log('[Cron] Is Service Key same as Anon?', key === process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
+
     const today = new Date().toISOString().split('T')[0];
     const currentTime = new Date().toLocaleTimeString('pl-PL', {
         hour: '2-digit',
