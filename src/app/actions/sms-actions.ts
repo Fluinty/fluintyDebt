@@ -1,6 +1,7 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { sendSMS, sendVoiceCall, normalizePhoneNumber, isValidPhoneNumber, isWithinCallingHours } from '@/lib/sms/smsapi-client';
 import { revalidatePath } from 'next/cache';
 
@@ -30,7 +31,7 @@ interface PlaceholderData {
  * Get usage stats for the current user
  */
 export async function getUsageStats(): Promise<{ data: UsageStats | null; error?: string }> {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -82,11 +83,16 @@ export async function getUsageStats(): Promise<{ data: UsageStats | null; error?
 /**
  * Check if user can send SMS (has remaining limit)
  */
-export async function canSendSMS(): Promise<{ allowed: boolean; remaining: number; error?: string }> {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export async function canSendSMS(client?: SupabaseClient, userId?: string): Promise<{ allowed: boolean; remaining: number; error?: string }> {
+    const supabase = client || await createServerClient();
 
-    if (!user) {
+    let currentUserId = userId;
+    if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        currentUserId = user?.id;
+    }
+
+    if (!currentUserId) {
         return { allowed: false, remaining: 0, error: 'Unauthorized' };
     }
 
@@ -94,7 +100,7 @@ export async function canSendSMS(): Promise<{ allowed: boolean; remaining: numbe
     const { data: profile } = await supabase
         .from('profiles')
         .select('sms_enabled')
-        .eq('id', user.id)
+        .eq('id', currentUserId)
         .single();
 
     if (!profile?.sms_enabled) {
@@ -104,7 +110,7 @@ export async function canSendSMS(): Promise<{ allowed: boolean; remaining: numbe
     const { data: subscription } = await supabase
         .from('subscriptions')
         .select('sms_limit, sms_used')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
         .single();
 
     if (!subscription) {
@@ -123,11 +129,16 @@ export async function canSendSMS(): Promise<{ allowed: boolean; remaining: numbe
 /**
  * Check if user can make voice calls
  */
-export async function canMakeCall(): Promise<{ allowed: boolean; remaining: number; error?: string }> {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+export async function canMakeCall(client?: SupabaseClient, userId?: string): Promise<{ allowed: boolean; remaining: number; error?: string }> {
+    const supabase = client || await createServerClient();
 
-    if (!user) {
+    let currentUserId = userId;
+    if (!currentUserId) {
+        const { data: { user } } = await supabase.auth.getUser();
+        currentUserId = user?.id;
+    }
+
+    if (!currentUserId) {
         return { allowed: false, remaining: 0, error: 'Unauthorized' };
     }
 
@@ -135,7 +146,7 @@ export async function canMakeCall(): Promise<{ allowed: boolean; remaining: numb
     const { data: profile } = await supabase
         .from('profiles')
         .select('voice_enabled')
-        .eq('id', user.id)
+        .eq('id', currentUserId)
         .single();
 
     if (!profile?.voice_enabled) {
@@ -150,7 +161,7 @@ export async function canMakeCall(): Promise<{ allowed: boolean; remaining: numb
     const { data: subscription } = await supabase
         .from('subscriptions')
         .select('calls_limit, calls_used')
-        .eq('user_id', user.id)
+        .eq('user_id', currentUserId)
         .single();
 
     if (!subscription) {
@@ -169,16 +180,16 @@ export async function canMakeCall(): Promise<{ allowed: boolean; remaining: numb
 /**
  * Increment SMS usage counter
  */
-async function incrementSMSUsage(userId: string): Promise<void> {
-    const supabase = await createClient();
+async function incrementSMSUsage(userId: string, client?: SupabaseClient): Promise<void> {
+    const supabase = client || await createServerClient();
     await supabase.rpc('increment_sms_usage', { p_user_id: userId });
 }
 
 /**
  * Increment calls usage counter
  */
-async function incrementCallsUsage(userId: string): Promise<void> {
-    const supabase = await createClient();
+async function incrementCallsUsage(userId: string, client?: SupabaseClient): Promise<void> {
+    const supabase = client || await createServerClient();
     await supabase.rpc('increment_calls_usage', { p_user_id: userId });
 }
 
@@ -200,8 +211,28 @@ function replacePlaceholders(template: string, data: PlaceholderData): string {
 /**
  * Execute a scheduled SMS step
  */
-export async function executeSMSStep(stepId: string) {
-    const supabase = await createClient();
+/**
+ * Execute a scheduled SMS step
+ */
+export async function executeSMSStep(stepId: string, isSystemAction: boolean = false) {
+    let supabase;
+
+    if (isSystemAction) {
+        // Use service role for cron jobs / system actions
+        supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        );
+    } else {
+        // Use user session for manual actions
+        supabase = await createServerClient();
+    }
 
     // Get step with all related data
     const { data: step, error: stepError } = await supabase
@@ -209,7 +240,7 @@ export async function executeSMSStep(stepId: string) {
         .select(`
             id, status, invoice_id, retry_count,
             invoices (
-                id, invoice_number, amount, due_date, interest_amount,
+                id, invoice_number, amount, due_date, interest_amount, user_id,
                 debtors (id, name, phone, sms_voice_consent_at)
             ),
             sequence_steps (id, sms_body)
@@ -221,13 +252,21 @@ export async function executeSMSStep(stepId: string) {
         return { error: 'Nie znaleziono kroku' };
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const invoice = step.invoices as any;
+
+    let userId = invoice?.user_id;
+
+    if (!userId && !isSystemAction) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+    }
+
+    if (!userId) {
         return { error: 'Unauthorized' };
     }
 
     // Check SMS limit
-    const canSend = await canSendSMS();
+    const canSend = await canSendSMS(supabase, userId);
     if (!canSend.allowed) {
         await supabase
             .from('scheduled_steps')
@@ -235,7 +274,7 @@ export async function executeSMSStep(stepId: string) {
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'sms',
             status: 'failed',
@@ -245,7 +284,6 @@ export async function executeSMSStep(stepId: string) {
         return { error: canSend.error };
     }
 
-    const invoice = step.invoices as any;
     const sequenceStep = step.sequence_steps as any;
     const debtor = invoice?.debtors;
 
@@ -256,7 +294,7 @@ export async function executeSMSStep(stepId: string) {
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'sms',
             status: 'failed',
@@ -274,7 +312,7 @@ export async function executeSMSStep(stepId: string) {
     const { data: profile } = await supabase
         .from('profiles')
         .select('company_name')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
     // Calculate days overdue
@@ -308,11 +346,11 @@ export async function executeSMSStep(stepId: string) {
             .eq('id', stepId);
 
         // Increment usage
-        await incrementSMSUsage(user.id);
+        await incrementSMSUsage(userId, supabase);
 
         // Log action
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'sms',
             channel: 'sms',
@@ -336,7 +374,7 @@ export async function executeSMSStep(stepId: string) {
 
         // Log failure
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'sms',
             channel: 'sms',
@@ -352,8 +390,28 @@ export async function executeSMSStep(stepId: string) {
 /**
  * Execute a scheduled Voice (TTS) step
  */
-export async function executeVoiceStep(stepId: string) {
-    const supabase = await createClient();
+/**
+ * Execute a scheduled Voice (TTS) step
+ */
+export async function executeVoiceStep(stepId: string, isSystemAction: boolean = false) {
+    let supabase;
+
+    if (isSystemAction) {
+        // Use service role for cron jobs / system actions
+        supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        );
+    } else {
+        // Use user session for manual actions
+        supabase = await createServerClient();
+    }
 
     // Get step with all related data
     const { data: step, error: stepError } = await supabase
@@ -361,7 +419,7 @@ export async function executeVoiceStep(stepId: string) {
         .select(`
             id, status, invoice_id, retry_count,
             invoices (
-                id, invoice_number, amount, due_date, interest_amount,
+                id, invoice_number, amount, due_date, interest_amount, user_id,
                 debtors (id, name, phone, sms_voice_consent_at)
             ),
             sequence_steps (id, voice_script)
@@ -373,13 +431,21 @@ export async function executeVoiceStep(stepId: string) {
         return { error: 'Nie znaleziono kroku' };
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const invoice = step.invoices as any;
+
+    let userId = invoice?.user_id;
+
+    if (!userId && !isSystemAction) {
+        const { data: { user } } = await supabase.auth.getUser();
+        userId = user?.id;
+    }
+
+    if (!userId) {
         return { error: 'Unauthorized' };
     }
 
     // Check call limit
-    const canCall = await canMakeCall();
+    const canCall = await canMakeCall(supabase, userId);
     if (!canCall.allowed) {
         await supabase
             .from('scheduled_steps')
@@ -387,7 +453,7 @@ export async function executeVoiceStep(stepId: string) {
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'voice',
             status: 'failed',
@@ -397,7 +463,6 @@ export async function executeVoiceStep(stepId: string) {
         return { error: canCall.error };
     }
 
-    const invoice = step.invoices as any;
     const sequenceStep = step.sequence_steps as any;
     const debtor = invoice?.debtors;
 
@@ -408,7 +473,7 @@ export async function executeVoiceStep(stepId: string) {
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'voice',
             status: 'failed',
@@ -422,7 +487,7 @@ export async function executeVoiceStep(stepId: string) {
     const { data: profile } = await supabase
         .from('profiles')
         .select('company_name')
-        .eq('id', user.id)
+        .eq('id', userId)
         .single();
 
     // Calculate days overdue
@@ -456,11 +521,11 @@ export async function executeVoiceStep(stepId: string) {
             .eq('id', stepId);
 
         // Increment usage
-        await incrementCallsUsage(user.id);
+        await incrementCallsUsage(userId, supabase);
 
         // Log action
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'voice',
             channel: 'voice',
@@ -507,7 +572,7 @@ export async function executeVoiceStep(stepId: string) {
 
         // Log failure
         await supabase.from('collection_actions').insert({
-            user_id: user.id,
+            user_id: userId,
             invoice_id: step.invoice_id,
             action_type: 'voice',
             channel: 'voice',
@@ -524,7 +589,7 @@ export async function executeVoiceStep(stepId: string) {
  * Toggle SMS enabled for user
  */
 export async function toggleSMSEnabled(enabled: boolean) {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -544,7 +609,7 @@ export async function toggleSMSEnabled(enabled: boolean) {
  * Toggle Voice enabled for user
  */
 export async function toggleVoiceEnabled(enabled: boolean) {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -564,7 +629,7 @@ export async function toggleVoiceEnabled(enabled: boolean) {
  * Record consent for SMS/Voice for a debtor
  */
 export async function recordSMSVoiceConsent(debtorId: string) {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {

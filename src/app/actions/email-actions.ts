@@ -78,12 +78,12 @@ export async function executeScheduledStep(stepId: string, isSystemAction: boole
     if (channel === 'sms') {
         // Dynamic import to avoid circular dependencies
         const { executeSMSStep } = await import('./sms-actions');
-        return executeSMSStep(stepId);
+        return executeSMSStep(stepId, isSystemAction);
     }
 
     if (channel === 'voice') {
         const { executeVoiceStep } = await import('./sms-actions');
-        return executeVoiceStep(stepId);
+        return executeVoiceStep(stepId, isSystemAction);
     }
 
     // Continue with email logic (default)
