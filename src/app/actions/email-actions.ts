@@ -1,6 +1,7 @@
 'use server';
 
-import { createClient } from '@/lib/supabase/server';
+import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
 import { sendCollectionEmail } from '@/lib/email/resend-client';
 import { generatePaymentReminderPDF } from '@/lib/pdf/generator';
 import { revalidatePath } from 'next/cache';
@@ -8,8 +9,25 @@ import { revalidatePath } from 'next/cache';
 /**
  * Execute a single scheduled step - send the email and update status
  */
-export async function executeScheduledStep(stepId: string) {
-    const supabase = await createClient();
+export async function executeScheduledStep(stepId: string, isSystemAction: boolean = false) {
+    let supabase;
+
+    if (isSystemAction) {
+        // Use service role for cron jobs / system actions
+        supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        );
+    } else {
+        // Use user session for manual actions
+        supabase = await createServerClient();
+    }
 
     // Get the scheduled step with all related data
     const { data: step, error: stepError } = await supabase
@@ -240,7 +258,7 @@ export async function executeScheduledStep(stepId: string) {
  * Process all pending scheduled steps that are due
  */
 export async function processAllPendingSteps() {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
     const today = new Date().toISOString().split('T')[0];
 
     // Get all pending steps that are due today or earlier
@@ -273,7 +291,7 @@ export async function processAllPendingSteps() {
  * Skip (cancel) earlier pending steps when user sends a later step
  */
 export async function skipEarlierSteps(stepIds: string[]) {
-    const supabase = await createClient();
+    const supabase = await createServerClient();
 
     if (stepIds.length === 0) return { success: true };
 

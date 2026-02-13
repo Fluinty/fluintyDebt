@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
     // Process each pending step
     for (const step of pendingSteps) {
         try {
-            const result = await executeScheduledStep(step.id);
+            const result = await executeScheduledStep(step.id, true);
 
             if (result.success) {
                 results.successCount++;
