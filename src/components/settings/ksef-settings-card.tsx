@@ -361,9 +361,8 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">3</span>
                                 <span>
                                     Kliknij <strong>„Wygeneruj certyfikat"</strong> — wybierz typ <em>Certyfikat aplikacji</em>.{' '}
-                                    Upewnij się, że certyfikat ma uprawnienia:{' '}
-                                    <strong className="text-foreground">Odczyt faktur</strong> oraz <strong className="text-foreground">Wystawianie faktur</strong>{' '}
-                                    (w panelu KSeF: <em>Zarządzanie uprawnieniami → Dodaj aplikację</em>).
+                                    Wystarczy uprawnienie <strong className="text-foreground">Odczyt faktur</strong>{' '}
+                                    — FluintyDebt tylko pobiera faktury, nie wystawia ich.
                                 </span>
                             </li>
                             <li className="flex gap-2">

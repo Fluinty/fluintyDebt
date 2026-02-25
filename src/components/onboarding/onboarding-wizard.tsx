@@ -354,16 +354,38 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         <div className="space-y-4">
                             {!ksefData.skipSetup ? (
                                 <>
-                                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-                                        <div className="flex items-start gap-3">
-                                            <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                                            <div>
-                                                <p className="font-medium">Autoryzacja certyfikatem</p>
-                                                <p className="text-sm text-muted-foreground mt-1">
-                                                    Wgraj certyfikat i klucz prywatny, aby w pełni zautomatyzować pobieranie faktur.
-                                                </p>
-                                            </div>
-                                        </div>
+                                    {/* Step-by-step guide */}
+                                    <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                                        <p className="text-sm font-semibold flex items-center gap-2">
+                                            <span className="text-base">📋</span>
+                                            Jak nadać uprawnienia i pobrać certyfikat z KSeF?
+                                        </p>
+                                        <ol className="text-sm text-muted-foreground space-y-2 list-none">
+                                            <li className="flex gap-2">
+                                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
+                                                <span>Wejdź na <a href="https://ksef.mf.gov.pl/web/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
+                                                <span>Przejdź do <strong>Ustawienia → Zarządzanie uprawnieniami → Dodaj aplikację</strong>.</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">3</span>
+                                                <span>
+                                                    Kliknij <strong>„Wygeneruj certyfikat"</strong> — wybierz typ <em>Certyfikat aplikacji</em>.{' '}
+                                                    Wystarczy uprawnienie <strong className="text-foreground">Odczyt faktur</strong>{' '}
+                                                    — FluintyDebt tylko pobiera faktury, nie wystawia ich.
+                                                </span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">4</span>
+                                                <span>Pobierz pliki: <strong>certyfikat (.pem lub .crt)</strong> oraz <strong>klucz prywatny (.key)</strong>. Zapisz hasło jeśli zostało ustawione.</span>
+                                            </li>
+                                            <li className="flex gap-2">
+                                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">5</span>
+                                                <span>Wróć tutaj i wgraj oba pliki poniżej. Gotowe! 🎉</span>
+                                            </li>
+                                        </ol>
                                     </div>
 
                                     {!ksefData.isConfigured ? (
@@ -373,6 +395,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                                 <span>🏢</span>
                                                 <span>Środowisko <strong>produkcyjne</strong> — ksef.mf.gov.pl</span>
                                             </div>
+
 
                                             <div className="space-y-2">
                                                 <Label>Format kluczy</Label>
