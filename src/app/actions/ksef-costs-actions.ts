@@ -85,8 +85,8 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
 
         // Sort by date descending
         const sortedInvoices = [...invoicesResponse.invoiceHeaderList].sort((a, b) => {
-            const dateA = new Date(a.invoicingDate || a.acquisitionTimestamp || 0).getTime();
-            const dateB = new Date(b.invoicingDate || b.acquisitionTimestamp || 0).getTime();
+            const dateA = new Date(a.invoicingDate || 0).getTime();
+            const dateB = new Date(b.invoicingDate || 0).getTime();
             return dateB - dateA;
         });
 
@@ -124,7 +124,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
             // Actually, KSeF ensures this if we query by Subject2.
 
             // Amounts
-            const grossAmount = Number(invData.grossAmount || invoiceHeader.gross || 0);
+            const grossAmount = Number((invData.grossAmount as any) || (invData.gross as any) || invoiceHeader.grossAmount || 0);
 
             // Calculate Due Date (default 14 days if not found)
             const invoiceDate = new Date(invoiceHeader.invoicingDate);
@@ -144,12 +144,12 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
                     sellerAddressData = parsed.seller; // Get full seller info
 
                     // Prefer seller specific bank account, fallback to global
-                    if (parsed.seller?.bankAccountNumber) {
-                        bankAccountNumber = parsed.seller.bankAccountNumber;
-                        bankName = parsed.seller.bankName || parsed.bankName || null;
-                    } else if (parsed.bankAccountNumber) {
-                        bankAccountNumber = parsed.bankAccountNumber;
-                        bankName = parsed.bankName || null;
+                    if ((parsed.seller as any)?.bankAccountNumber) {
+                        bankAccountNumber = (parsed.seller as any).bankAccountNumber;
+                        bankName = (parsed.seller as any).bankName || (parsed as any).bankName || null;
+                    } else if ((parsed as any).bankAccountNumber) {
+                        bankAccountNumber = (parsed as any).bankAccountNumber;
+                        bankName = (parsed as any).bankName || null;
                     }
 
                     if (bankAccountNumber) {
