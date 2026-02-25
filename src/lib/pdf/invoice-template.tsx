@@ -1,7 +1,17 @@
 import React from 'react';
 import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
 import type { PaymentReminderData } from './types';
-import { InvoiceItem } from '../ksef/xml-parser';
+
+// Inline type — mirrors KSeF parsed invoice line item shape
+interface InvoiceItem {
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPriceNet: number;
+    vatRate: number;
+    totalNet: number;
+    totalGross: number;
+}
 
 // Register Polish fonts
 Font.register({
