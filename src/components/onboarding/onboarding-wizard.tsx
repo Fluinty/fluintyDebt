@@ -12,14 +12,21 @@ import {
     ExternalLink,
     Search,
     Loader2,
+    ShieldCheck,
+    Upload,
+    Eye,
+    EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { fetchCompanyByNip } from '@/app/actions/gus-actions';
+import { saveKSeFSettings } from '@/app/actions/ksef-actions';
+import type { KSeFEnvironment } from '@/lib/ksef/types';
 
 interface OnboardingWizardProps {
     onComplete: (data?: any) => void;
@@ -30,8 +37,6 @@ const steps = [
     { id: 2, title: 'KSeF (opcjonalne)', icon: FileKey },
     { id: 3, title: 'Domyślna sekwencja', icon: Zap },
 ];
-
-
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const router = useRouter();
@@ -49,22 +54,34 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         bank_account: '',
     });
 
-
-
     // Sequence choice
     const [selectedSequence, setSelectedSequence] = useState('standard');
 
-    // KSeF data (optional)
+    // KSeF data
     const [ksefData, setKsefData] = useState({
-        token: '',
-        nip: '',
+        isConfigured: false,
         skipSetup: false,
     });
+
+    // KSeF Form State
+    const ksefEnv = 'production' as KSeFEnvironment;
+    const [ksefNip, setKsefNip] = useState('');
+    const [certFormat, setCertFormat] = useState<'p12' | 'pem'>('pem');
+    const [certFile, setCertFile] = useState<File | null>(null);
+    const [keyFile, setKeyFile] = useState<File | null>(null);
+    const [p12File, setP12File] = useState<File | null>(null);
+    const [certPassword, setCertPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isConnectingKsef, setIsConnectingKsef] = useState(false);
 
     const progress = (currentStep / steps.length) * 100;
 
     const handleNext = () => {
         if (currentStep < steps.length) {
+            // Pre-fill KSeF NIP from Company NIP if clear
+            if (currentStep === 1 && !ksefNip) {
+                setKsefNip(companyData.nip);
+            }
             setCurrentStep(currentStep + 1);
         } else {
             handleComplete();
@@ -106,7 +123,62 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         }
     };
 
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cert' | 'key' | 'p12') => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (type === 'cert') setCertFile(file);
+            if (type === 'key') setKeyFile(file);
+            if (type === 'p12') setP12File(file);
+        }
+    };
 
+    const handleConnectKSeF = async () => {
+        if (!ksefNip) {
+            toast.error('NIP jest wymagany');
+            return;
+        }
+
+        if (certFormat === 'pem' && (!certFile || !keyFile)) {
+            toast.error('Wymagane pliki .crt i .key');
+            return;
+        }
+        if (certFormat === 'p12' && !p12File) {
+            toast.error('Wymagany plik .p12');
+            return;
+        }
+
+        setIsConnectingKsef(true);
+        try {
+            const formData = new FormData();
+            formData.append('ksef_environment', ksefEnv);
+            formData.append('ksef_nip', ksefNip);
+            formData.append('ksef_cert_format', certFormat);
+            formData.append('is_enabled', 'true');
+            formData.append('auto_confirm_invoices', 'false'); // Default for wizard
+
+            if (certPassword) formData.append('ksef_cert_password', certPassword);
+
+            if (certFormat === 'pem') {
+                if (certFile) formData.append('ksef_cert_file', certFile);
+                if (keyFile) formData.append('ksef_key_file', keyFile);
+            } else {
+                if (p12File) formData.append('ksef_p12_file', p12File);
+            }
+
+            const result = await saveKSeFSettings(formData);
+
+            if (result.success) {
+                setKsefData({ isConfigured: true, skipSetup: false });
+                toast.success('KSeF połączony pomyślnie! Certyfikat zweryfikowany przez Ministerstwo Finansów. ✅');
+            } else {
+                toast.error('Błąd połączenia z KSeF: ' + (result.error || 'Sprawdź certyfikat i klucz prywatny'));
+            }
+        } catch (e) {
+            toast.error('Wystąpił nieoczekiwany błąd');
+        } finally {
+            setIsConnectingKsef(false);
+        }
+    };
 
     const handleComplete = () => {
         // Build address from parts
@@ -121,7 +193,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 postal_code: companyData.postal_code,
                 bank_account: companyData.bank_account,
             },
-            ksef: ksefData,
+            // Note: KSeF is already saved if configured. passing basic meta-data
+            ksef_configured: ksefData.isConfigured,
             sequence: selectedSequence,
         };
         console.log('Onboarding complete:', data);
@@ -165,7 +238,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     <CardTitle>Krok {currentStep}: {steps[currentStep - 1].title}</CardTitle>
                     <CardDescription>
                         {currentStep === 1 && 'Uzupełnij podstawowe dane Twojej firmy'}
-                        {currentStep === 2 && 'Automatyczny import faktur z Krajowego Systemu e-Faktur'}
+                        {currentStep === 2 && 'Skonfiguruj certyfikat KSeF (możesz pominąć)'}
                         {currentStep === 3 && 'Wybierz domyślną sekwencję windykacyjną'}
                     </CardDescription>
                 </CardHeader>
@@ -259,90 +332,138 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     value={companyData.bank_account}
                                     onChange={(e) => setCompanyData({ ...companyData, bank_account: e.target.value })}
                                     placeholder="XX XXXX XXXX XXXX XXXX XXXX XXXX"
+                                    maxLength={32}
                                 />
-                                <p className="text-xs text-muted-foreground">
-                                    Będzie wyświetlany w wezwaniach do zapłaty
-                                </p>
                             </div>
                         </div>
                     )}
 
-                    {/* Step 2: KSeF (Optional) */}
+                    {/* Step 2: KSeF (Updated with Certificates) */}
                     {currentStep === 2 && (
                         <div className="space-y-4">
-                            <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                                <div className="flex items-start gap-3">
-                                    <FileKey className="h-5 w-5 text-primary mt-0.5" />
-                                    <div>
-                                        <p className="font-medium">Automatyczny import faktur</p>
-                                        <p className="text-sm text-muted-foreground mt-1">
-                                            Połącz się z KSeF, aby automatycznie importować faktury sprzedażowe
-                                            i uruchamiać dla nich sekwencje windykacyjne.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
                             {!ksefData.skipSetup ? (
                                 <>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="ksef_nip">NIP firmy</Label>
-                                        <Input
-                                            id="ksef_nip"
-                                            value={ksefData.nip || companyData.nip}
-                                            onChange={(e) => setKsefData({ ...ksefData, nip: e.target.value })}
-                                            placeholder="1234567890"
-                                            maxLength={10}
-                                        />
+                                    <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                                        <div className="flex items-start gap-3">
+                                            <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                                            <div>
+                                                <p className="font-medium">Autoryzacja certyfikatem</p>
+                                                <p className="text-sm text-muted-foreground mt-1">
+                                                    Wgraj certyfikat i klucz prywatny, aby w pełni zautomatyzować pobieranie faktur.
+                                                </p>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="ksef_token">Token autoryzacyjny</Label>
-                                        <Input
-                                            id="ksef_token"
-                                            type="password"
-                                            value={ksefData.token}
-                                            onChange={(e) => setKsefData({ ...ksefData, token: e.target.value })}
-                                            placeholder="Wklej token z aplikacji KSeF"
-                                        />
-                                        <p className="text-xs text-muted-foreground">
-                                            Token możesz wygenerować w{' '}
-                                            <a
-                                                href="https://ksef-test.mf.gov.pl/aplikacja-podatnika-ksef/"
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="text-primary hover:underline inline-flex items-center gap-1"
-                                            >
-                                                Aplikacji Podatnika KSeF
-                                                <ExternalLink className="h-3 w-3" />
-                                            </a>
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => setKsefData({ ...ksefData, skipSetup: true })}
-                                        className="w-full"
-                                    >
-                                        Pomiń krok - skonfiguruję później
-                                    </Button>
+
+                                    {!ksefData.isConfigured ? (
+                                        <div className="space-y-4 border rounded-lg p-4 bg-card">
+                                            {/* Production only — no env selector */}
+                                            <div className="flex items-center gap-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded px-3 py-2">
+                                                <span>🏢</span>
+                                                <span>Środowisko <strong>produkcyjne</strong> — ksef.mf.gov.pl</span>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>Format kluczy</Label>
+                                                <RadioGroup
+                                                    value={certFormat}
+                                                    onValueChange={(v: 'p12' | 'pem') => setCertFormat(v)}
+                                                    className="flex gap-4 pt-2"
+                                                >
+                                                    <div className="flex items-center space-x-2">
+                                                        <RadioGroupItem value="pem" id="wz-pem" />
+                                                        <Label htmlFor="wz-pem">.crt + .key</Label>
+                                                    </div>
+                                                    <div className="flex items-center space-x-2">
+                                                        <RadioGroupItem value="p12" id="wz-p12" />
+                                                        <Label htmlFor="wz-p12">.p12</Label>
+                                                    </div>
+                                                </RadioGroup>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label>NIP</Label>
+                                                <Input value={ksefNip} onChange={e => setKsefNip(e.target.value)} placeholder="NIP" />
+                                            </div>
+
+                                            {certFormat === 'pem' ? (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div className="space-y-2">
+                                                        <Label>Certyfikat (.crt)</Label>
+                                                        <Input type="file" accept=".crt,.pem,.cer" onChange={e => handleFileChange(e, 'cert')} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label>Klucz prywatny (.key)</Label>
+                                                        <Input type="file" accept=".key,.pem" onChange={e => handleFileChange(e, 'key')} />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    <Label>Plik .p12</Label>
+                                                    <Input type="file" accept=".p12,.pfx" onChange={e => handleFileChange(e, 'p12')} />
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-2">
+                                                <Label>Hasło do klucza (opcjonalne)</Label>
+                                                <div className="relative">
+                                                    <Input
+                                                        type={showPassword ? "text" : "password"}
+                                                        value={certPassword}
+                                                        onChange={e => setCertPassword(e.target.value)}
+                                                        placeholder="Hasło jeśli wymagane"
+                                                    />
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="absolute right-1 top-1/2 -translate-y-1/2"
+                                                        onClick={() => setShowPassword(!showPassword)}
+                                                    >
+                                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                                    </Button>
+                                                </div>
+                                            </div>
+
+                                            <Button className="w-full mt-2" onClick={handleConnectKSeF} disabled={isConnectingKsef}>
+                                                {isConnectingKsef && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                                Połącz z KSeF
+                                            </Button>
+
+                                            <div className="text-center pt-2">
+                                                <Button variant="ghost" size="sm" onClick={() => setKsefData({ ...ksefData, skipSetup: true })}>
+                                                    Pomiń konfigurację KSeF
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-8 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                                            <div className="inline-flex p-3 rounded-full bg-green-100 dark:bg-green-800 mb-4">
+                                                <Check className="h-8 w-8 text-green-600 dark:text-green-300" />
+                                            </div>
+                                            <h3 className="text-lg font-medium text-green-800 dark:text-green-300">Połączono pomyślnie!</h3>
+                                            <p className="text-sm text-green-700 dark:text-green-400 mt-2">
+                                                Twoja integracja KSeF jest gotowa. Faktury będą pobierane automatycznie.
+                                            </p>
+                                        </div>
+                                    )}
                                 </>
                             ) : (
-                                <div className="text-center py-6">
-                                    <p className="text-muted-foreground">
-                                        Integracja KSeF pominięta
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setKsefData({ ...ksefData, skipSetup: false })}
-                                        className="text-sm text-primary hover:underline mt-2"
-                                    >
+                                <div className="text-center py-10 space-y-4">
+                                    <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                        <FileKey className="h-6 w-6 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                        <p className="font-medium text-muted-foreground">Konfiguracja KSeF pominięta</p>
+                                        <p className="text-xs text-muted-foreground mt-1">Będziesz mógł to zrobić później w Ustawieniach.</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => setKsefData({ ...ksefData, skipSetup: false })}>
                                         Chcę jednak skonfigurować teraz
-                                    </button>
+                                    </Button>
                                 </div>
                             )}
                         </div>
                     )}
-
-
 
                     {/* Step 3: Sequence */}
                     {currentStep === 3 && (
@@ -437,6 +558,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                     </div>
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }

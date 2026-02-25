@@ -24,7 +24,7 @@ export default async function CostsPage() {
         .eq('user_id', user.id)
         .single();
 
-    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
+    const isKSeFConfigured = !!ksefSettings?.is_enabled;
 
     // Fetch cost invoices
     const { data: invoices } = await supabase

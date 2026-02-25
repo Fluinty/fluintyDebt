@@ -90,7 +90,7 @@ export default async function DashboardPage() {
 
     // Calculate action items - things that need user attention
     const debtorsWithoutEmail = debtorsList.filter(d => !d.email);
-    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
+    const isKSeFConfigured = !!ksefSettings?.is_enabled;
 
     const actionItems: Array<{
         id: string;

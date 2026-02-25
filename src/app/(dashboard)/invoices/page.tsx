@@ -28,7 +28,7 @@ export default async function InvoicesPage({
         .eq('user_id', user.id)
         .single();
 
-    const isKSeFConfigured = !!ksefSettings?.ksef_token_encrypted;
+    const isKSeFConfigured = !!ksefSettings?.is_enabled;
 
     // Fetch real invoices with debtor names
     const { data: invoices } = await supabase

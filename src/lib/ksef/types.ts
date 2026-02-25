@@ -1,200 +1,160 @@
 /**
- * KSeF (Krajowy System e-Faktur) Types
+ * KSeF Type Definitions
  */
 
-// KSeF Environment
+// ============================================================================
+// Environment & Config
+// ============================================================================
+
 export type KSeFEnvironment = 'test' | 'production';
 
-// KSeF API Endpoints
-export const KSEF_API_URLS = {
-    test: 'https://ksef-test.mf.gov.pl/api',
-    production: 'https://ksef.mf.gov.pl/api',
-} as const;
+export interface KSeFConfig {
+    environment: KSeFEnvironment;
+    certificate?: string;
+    privateKey?: string;
+    privateKeyPassword?: string;
+    nip?: string;
+    token?: string;
+}
 
-// Sync frequency options
-export type SyncFrequency = 'daily' | 'manual';
+// ============================================================================
+// User Settings (matches Supabase table: user_ksef_settings)
+// ============================================================================
 
-// KSeF Invoice status in our system
-export type KSeFInvoiceStatus = 'pending_confirmation' | 'confirmed' | 'rejected';
+// ============================================================================
+// User Settings (matches Supabase table: user_ksef_settings)
+// ============================================================================
 
-// User KSeF Settings
 export interface UserKSeFSettings {
     id: string;
     user_id: string;
-    ksef_environment: KSeFEnvironment;
-    is_enabled: boolean;
+    ksef_environment: string;
+    ksef_nip: string;
+    ksef_cert_storage_path: string | null;
+    ksef_key_storage_path: string | null;
+    ksef_cert_format: 'pem' | 'p12' | null;
+    ksef_cert_password_encrypted: string | null;
     ksef_token_encrypted: string | null;
-    ksef_nip: string | null;
-    sync_frequency: SyncFrequency;
-    sync_time: string | null;
+    is_enabled: boolean;
     auto_confirm_invoices: boolean;
+    sync_frequency: 'daily' | 'weekly' | 'manual';
+    sync_time: string | null;
     last_sync_at: string | null;
     last_sync_status: string | null;
-    last_sync_error: string | null;
     invoices_synced_count: number;
     created_at: string;
     updated_at: string;
 }
 
-// KSeF Invoice from API (simplified structure)
-export interface KSeFInvoice {
-    ksefReferenceNumber: string; // Unique KSeF ID
-    invoiceNumber: string;
-    invoiceType: 'VAT' | 'VAT-RR' | 'VAT-MP';
-    issueDate: string;
-    sellerNip: string;
-    sellerName: string;
-    buyerNip: string;
-    buyerName: string;
-    netAmount: number;
-    vatAmount: number;
-    grossAmount: number;
-    currencyCode: string;
-    acquisitionTimestamp: string;
-}
+// ============================================================================
+// Session
+// ============================================================================
 
-// KSeF Session
 export interface KSeFSession {
-    sessionToken: string;
     referenceNumber: string;
+    sessionToken: string;
     expiresAt: Date;
 }
 
-// KSeF Auth Response
-export interface KSeFAuthResponse {
-    timestamp: string;
-    referenceNumber: string;
-    processingCode: number;
-    processingDescription: string;
-    sessionToken?: {
-        token: string;
-        context: {
-            contextIdentifier: {
-                type: string;
-                identifier: string;
-            };
-            credentialsRoleList: Array<{
-                type: string;
-                roleType: string;
-            }>;
-        };
+// ============================================================================
+// Connection Test
+// ============================================================================
+
+export interface KSeFConnectionTestResult {
+    success: boolean;
+    environment: KSeFEnvironment;
+    message: string;
+    error?: string;
+    sessionInfo?: {
+        referenceNumber: string;
+        nip: string;
     };
 }
 
-// KSeF Invoice Query Response
+// ============================================================================
+// Invoice Query & Response
+// ============================================================================
+
+export interface KSeFInvoiceQuery {
+    startDate: Date;
+    endDate: Date;
+    queryCriteria?: Record<string, any>;
+}
+
+export interface KSeFInvoiceHeader {
+    ksefReferenceNumber?: string;
+    ksefNumber?: string;
+    invoiceNumber: string;
+    invoicingDate: string;
+    seller?: {
+        nip?: string;
+        name?: string;
+    };
+    sellerNip?: string;
+    buyer?: {
+        nip?: string;
+        name?: string;
+        identifier?: {
+            value?: string;
+        };
+    };
+    grossAmount?: number;
+    netAmount?: number;
+    vatAmount?: number;
+}
+
 export interface KSeFInvoiceListResponse {
     timestamp: string;
     referenceNumber: string;
     processingCode: number;
     processingDescription: string;
     numberOfElements: number;
-    pageSize: number;
-    pageOffset: number;
     invoiceHeaderList: KSeFInvoiceHeader[];
+    pageSize?: number;
+    pageOffset?: number;
 }
 
-export interface KSeFInvoiceHeader {
-    invoiceReferenceNumber: string;
-    ksefReferenceNumber: string;
-    ksefNumber?: string;  // KSeF 2.0 format
-    invoiceType: string;
-    invoiceNumber: string;
-    invoicingDate: string;
-    acquisitionTimestamp: string;
+// ============================================================================
+// Parsed Invoice (from XML)
+// ============================================================================
 
-    // KSeF 2.0 format
+export interface KSeFInvoiceItem {
+    description: string;
+    quantity: number;
+    unit: string;
+    unitPriceNet: number;
+    unitPriceGross: number;
+    vatRate: string;
+    totalNet: number;
+    totalGross: number;
+}
+
+export interface KSeFParsedInvoice {
+    items: KSeFInvoiceItem[];
     seller?: {
-        nip: string;
-        name: string;
+        nip?: string;
+        name?: string;
     };
     buyer?: {
         nip?: string;
         name?: string;
-        identifier?: {
-            type: string;
-            value: string;
-        };
     };
-    sellerNip?: string;
-
-    // Legacy format (KSeF 1.0)
-    subjectBy?: {
-        issuedByIdentifier: {
-            type: string;
-            identifier: string;
-        };
-        issuedByName: {
-            tradeName?: string;
-            fullName?: string;
-        };
-    };
-    subjectTo?: {
-        issuedToIdentifier: {
-            type: string;
-            identifier: string;
-        };
-        issuedToName: {
-            tradeName?: string;
-            fullName?: string;
-        };
-    };
-    net?: string;
-    vat?: string;
-    gross?: string;
+    invoiceNumber?: string;
+    issueDate?: string;
+    grossTotal?: number;
+    netTotal?: number;
+    vatTotal?: number;
 }
 
-// Sync result
-export interface KSeFSyncResult {
-    success: boolean;
-    invoicesFound: number;
-    invoicesImported: number;
-    invoicesSkipped: number;
-    errors: string[];
-    lastProcessedDate: string | null;
-}
-
-// Audit log action types
-export type KSeFAuditAction =
-    | 'token_created'
-    | 'token_updated'
-    | 'token_deleted'
-    | 'token_accessed'
-    | 'sync_started'
-    | 'sync_completed'
-    | 'sync_failed'
-    | 'invoice_imported'
-    | 'invoice_confirmed'
-    | 'invoice_rejected';
-
-// Audit log entry
-export interface KSeFAuditLog {
-    id: string;
-    user_id: string;
-    action: KSeFAuditAction;
-    ip_address: string | null;
-    user_agent: string | null;
-    metadata: Record<string, unknown>;
-    created_at: string;
-}
-
-// Connection test result
-export interface KSeFConnectionTestResult {
-    success: boolean;
-    environment: KSeFEnvironment;
-    message: string;
-    sessionInfo?: {
-        referenceNumber: string;
-        nip: string;
-    };
-    error?: string;
-}
-
-// Form data for saving settings
+// Helper types for UI
 export interface KSeFSettingsFormData {
     ksef_environment: KSeFEnvironment;
-    ksef_token: string;
     ksef_nip: string;
+    ksef_token?: string;
     is_enabled: boolean;
-    sync_frequency: SyncFrequency;
+    sync_frequency: 'daily' | 'weekly' | 'manual';
+    sync_time?: string;
     auto_confirm_invoices: boolean;
 }
+
+export type SyncFrequency = 'daily' | 'weekly' | 'manual';

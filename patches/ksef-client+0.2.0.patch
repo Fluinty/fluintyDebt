@@ -1,0 +1,23 @@
+diff --git a/node_modules/ksef-client/dist/index.cjs b/node_modules/ksef-client/dist/index.cjs
+index 9917ddf..695aeec 100644
+--- a/node_modules/ksef-client/dist/index.cjs
++++ b/node_modules/ksef-client/dist/index.cjs
+@@ -10,7 +10,7 @@ var yazl = require('yazl');
+ var yauzl = require('yauzl');
+ var undici = require('undici');
+ 
+-function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
++function _interopDefault(e) { return e && e.__esModule ? e : { default: e }; }
+ 
+ var crypto2__default = /*#__PURE__*/_interopDefault(crypto2);
+ var fs__default = /*#__PURE__*/_interopDefault(fs);
+@@ -1310,7 +1310,8 @@ var XadesSignatureService = class {
+     const { certificatePem, privateKey } = options.keyPair;
+     const certificate = new crypto2__default.default.X509Certificate(certificatePem);
+     const signatureAlgorithm = signatureAlgorithmForCertificate(certificate);
+-    const { SignedXml } = xmlCrypto__default.default;
++    const xmlCryptoImpl = xmlCrypto__default.default || xmlCrypto__default;
++    const { SignedXml } = xmlCryptoImpl;
+     const sig = new SignedXml();
+     sig.signatureAlgorithm = signatureAlgorithm;
+     sig.canonicalizationAlgorithm = "http://www.w3.org/2001/10/xml-exc-c14n#";

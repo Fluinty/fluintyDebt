@@ -1,172 +1,164 @@
 /**
- * Simple KSeF XML Parser (FA-2)
- * Extracts invoice items and party data from the XML structure
+ * KSeF Invoice XML Parser
+ * 
+ * Parses FA(3) invoice XML from KSeF and extracts structured data.
+ * KSeF invoices follow the schema: http://crd.gov.pl/wzor/2023/06/29/12648/
  */
 
-export interface InvoiceItem {
-    description: string;
-    quantity: number;
-    unitPriceNet: number;
-    unitPriceGross: number;
-    vatRate: number;
-    totalNet: number;
-    totalGross: number;
-    unit: string;
-}
+import { DOMParser } from '@xmldom/xmldom';
+import type { KSeFInvoiceItem, KSeFParsedInvoice } from './types';
 
-export interface InvoiceParty {
-    nip?: string;
-    name?: string;
-    address?: string; // Combined address
-    city?: string;
-    postalCode?: string;
-    street?: string;
-    houseNumber?: string;
-    flatNumber?: string;
-    bankAccountNumber?: string;
-    bankName?: string;
-}
-
-export interface InvoiceData {
-    items: InvoiceItem[];
-    seller?: InvoiceParty;
-    buyer?: InvoiceParty;
-    bankAccountNumber?: string; // Main account (usually seller's)
-    bankName?: string;
-}
-
-function extractTagValue(xml: string, tagName: string): string | undefined {
-    // Match <TagName>Value</TagName> case insensitive, ignoring namespaces
-    const regex = new RegExp(`<([a-zA-Z0-9_]+:)?${tagName}>(.*?)<\\/([a-zA-Z0-9_]+:)?${tagName}>`, 'i');
-    const match = xml.match(regex);
-    if (match) {
-        // Group 2 is the content
-        return match[match.length - 1] || match[2] || match[1];
+/**
+ * Get text content of first matching element.
+ * Handles namespaced elements by trying both with and without namespace.
+ */
+function getText(parent: Element, tagName: string): string | undefined {
+    // Try direct tag name first
+    let els = parent.getElementsByTagName(tagName);
+    if (els.length === 0) {
+        // Try with common namespace prefixes
+        els = parent.getElementsByTagName(`tns:${tagName}`);
     }
-    // Try simple match on stripped XML just in case
-    const simpleRegex = new RegExp(`<${tagName}>(.*?)<\\/${tagName}>`, 'i');
-    const simpleMatch = xml.match(simpleRegex);
-    return simpleMatch ? simpleMatch[1] : undefined;
+    if (els.length === 0) {
+        // Try wildcard namespace
+        els = parent.getElementsByTagNameNS('*', tagName);
+    }
+    if (els.length > 0 && els[0].textContent) {
+        return els[0].textContent.trim();
+    }
+    return undefined;
 }
 
-function parseAddress(blockXml: string): InvoiceParty {
-    const city = extractTagValue(blockXml, 'Miejscowosc');
-    const postalCode = extractTagValue(blockXml, 'KodPocztowy');
-    const street = extractTagValue(blockXml, 'Ulica');
-    const houseNumber = extractTagValue(blockXml, 'NrDomu');
-    const flatNumber = extractTagValue(blockXml, 'NrLokalu');
-    const nip = extractTagValue(blockXml, 'NIP');
-    const name = extractTagValue(blockXml, 'PelnaNazwa') || extractTagValue(blockXml, 'Nazwa');
-
-    let address = '';
-    if (street) address += street;
-    if (houseNumber) address += ` ${houseNumber}`;
-    if (flatNumber) address += `/${flatNumber}`;
-
-    // Fallback if no street (some rural addresses)
-    if (!street && city && houseNumber) {
-        address = `${city} ${houseNumber}`;
+/**
+ * Get all elements matching tag name (namespace-aware).
+ */
+function getElements(parent: Element | Document, tagName: string): Element[] {
+    let els = parent.getElementsByTagName(tagName);
+    if (els.length === 0) {
+        els = parent.getElementsByTagNameNS('*', tagName);
     }
+    return Array.from(els) as Element[];
+}
 
-    return {
-        nip,
-        name,
-        city,
-        postalCode,
-        street,
-        houseNumber,
-        flatNumber,
-        address: address.trim() || undefined
+/**
+ * Safe number parse with fallback to 0.
+ */
+function num(value: string | undefined): number {
+    if (!value) return 0;
+    const n = parseFloat(value.replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+}
+
+/**
+ * Parse KSeF invoice XML and extract items + metadata.
+ * 
+ * Expected XML structure (FA schema v3):
+ * <Faktura>
+ *   <Naglowek>...</Naglowek>
+ *   <Podmiot1> (seller) </Podmiot1>
+ *   <Podmiot2> (buyer) </Podmiot2>
+ *   <Fa>
+ *     <FaWiersz> (line items) </FaWiersz>
+ *     ...
+ *   </Fa>
+ * </Faktura>
+ */
+export function parseKSeFXml(xmlContent: string): KSeFParsedInvoice {
+    const result: KSeFParsedInvoice = {
+        items: [],
     };
-}
-
-export function parseKSeFXml(xmlContent: string): InvoiceData {
-    const items: InvoiceItem[] = [];
-    let bankAccountNumber: string | undefined;
-    let bankName: string | undefined;
-    let seller: InvoiceParty | undefined;
-    let buyer: InvoiceParty | undefined;
 
     try {
-        // Remove namespaces to simplify parsing
-        const cleanXml = xmlContent.replace(/<([a-zA-Z0-9]+):/g, '<').replace(/<\/([a-zA-Z0-9]+):/g, '</');
+        const doc = new DOMParser().parseFromString(xmlContent, 'text/xml');
+        const root = doc.documentElement;
 
-        // Extract global bank info first (legacy support)
-        bankAccountNumber = extractTagValue(cleanXml, 'NrRachunku');
-        if (bankAccountNumber) bankAccountNumber = bankAccountNumber.replace(/\s/g, '');
-
-        if (!bankAccountNumber) {
-            bankAccountNumber = extractTagValue(cleanXml, 'IBAN');
-            if (bankAccountNumber) bankAccountNumber = bankAccountNumber.replace(/\s/g, '');
+        if (!root) {
+            console.warn('[KSeF XML Parser] No root element found');
+            return result;
         }
 
-        bankName = extractTagValue(cleanXml, 'NazwaBanku');
-
-        // Extract Seller (Podmiot1 or Sprzedawca)
-        const sellerBlockMatch = cleanXml.match(/(<Podmiot1[\s\S]*?<\/Podmiot1>)|(<Sprzedawca[\s\S]*?<\/Sprzedawca>)/i);
-        if (sellerBlockMatch) {
-            const sellerBlock = sellerBlockMatch[0];
-            seller = parseAddress(sellerBlock);
-
-            // Look for bank account in seller block specifically if not found globally or to be precise
-            const sellerAccount = extractTagValue(sellerBlock, 'NrRachunku') || extractTagValue(sellerBlock, 'IBAN');
-            if (sellerAccount) seller.bankAccountNumber = sellerAccount.replace(/\s/g, '');
-            else seller.bankAccountNumber = bankAccountNumber; // Fallback to global
-
-            const sellerBank = extractTagValue(sellerBlock, 'NazwaBanku');
-            if (sellerBank) seller.bankName = sellerBank;
-            else seller.bankName = bankName;
+        // ── Seller (Podmiot1) ──
+        const podmiot1List = getElements(root, 'Podmiot1');
+        if (podmiot1List.length > 0) {
+            const podmiot1 = podmiot1List[0];
+            result.seller = {
+                nip: getText(podmiot1, 'NIP'),
+                name: getText(podmiot1, 'Nazwa')
+                    || getText(podmiot1, 'NazwaHandlowa')
+                    || getText(podmiot1, 'ImieNazwisko'),
+            };
         }
 
-        // Extract Buyer (Podmiot2 or Nabywca)
-        const buyerBlockMatch = cleanXml.match(/(<Podmiot2[\s\S]*?<\/Podmiot2>)|(<Nabywca[\s\S]*?<\/Nabywca>)/i);
-        if (buyerBlockMatch) {
-            const buyerBlock = buyerBlockMatch[0];
-            buyer = parseAddress(buyerBlock);
+        // ── Buyer (Podmiot2) ──
+        const podmiot2List = getElements(root, 'Podmiot2');
+        if (podmiot2List.length > 0) {
+            const podmiot2 = podmiot2List[0];
+            result.buyer = {
+                nip: getText(podmiot2, 'NIP'),
+                name: getText(podmiot2, 'Nazwa')
+                    || getText(podmiot2, 'NazwaHandlowa')
+                    || getText(podmiot2, 'ImieNazwisko'),
+            };
         }
 
-        // Find all invoice lines (Wiersz)
-        const lineRegex = /<Wiersz[\s\S]*?<\/Wiersz>/g;
-        const lines = cleanXml.match(lineRegex);
+        // ── Invoice metadata ──
+        result.invoiceNumber = getText(root, 'P_2')  // Numer faktury
+            || getText(root, 'NrFaktury');
+        result.issueDate = getText(root, 'P_1')       // Data wystawienia
+            || getText(root, 'DataWystawienia');
 
-        if (lines) {
-            for (const line of lines) {
-                const description = extractTagValue(line, 'P_7') || 'Towar/Usługa';
-                const quantity = parseFloat(extractTagValue(line, 'P_8B') || '1');
-                const unit = extractTagValue(line, 'P_8A') || 'szt';
-                const unitPriceNet = parseFloat(extractTagValue(line, 'P_9A') || '0');
+        // ── Totals ──
+        result.grossTotal = num(getText(root, 'P_15'));   // Kwota brutto
+        result.netTotal = num(getText(root, 'P_13_1'))    // Netto (stawka podstawowa)
+            + num(getText(root, 'P_13_2'))                 // Netto (stawka obniżona)
+            + num(getText(root, 'P_13_3'))                 // Netto (kolejna stawka)
+            + num(getText(root, 'P_13_6'))                 // Netto (0%)
+            + num(getText(root, 'P_13_7'));                // Netto (zw.)
 
-                // P_11 is net total
-                let totalNet = parseFloat(extractTagValue(line, 'P_11') || '0');
-                if (totalNet === 0 && unitPriceNet > 0) totalNet = quantity * unitPriceNet;
+        // ── Line items (FaWiersz) ──
+        const wiersze = getElements(root, 'FaWiersz');
+        for (const wiersz of wiersze) {
+            const item: KSeFInvoiceItem = {
+                description: getText(wiersz, 'P_7')       // Nazwa towaru/usługi
+                    || getText(wiersz, 'NazwaTowaru')
+                    || 'Brak opisu',
+                quantity: num(getText(wiersz, 'P_8B')      // Ilość
+                    || getText(wiersz, 'Ilosc')),
+                unit: getText(wiersz, 'P_8A')              // Jednostka miary
+                    || getText(wiersz, 'JednostkaMiary')
+                    || 'szt.',
+                unitPriceNet: num(getText(wiersz, 'P_9A')  // Cena jednostkowa netto
+                    || getText(wiersz, 'CenaJednostkowa')),
+                unitPriceGross: num(getText(wiersz, 'P_9B') // Cena jedn. brutto
+                    || getText(wiersz, 'CenaJednostkowaBrutto')),
+                vatRate: getText(wiersz, 'P_12')           // Stawka VAT
+                    || getText(wiersz, 'StawkaVAT')
+                    || '23',
+                totalNet: num(getText(wiersz, 'P_11')      // Wartość netto
+                    || getText(wiersz, 'WartoscNetto')),
+                totalGross: num(getText(wiersz, 'P_11A')   // Wartość brutto
+                    || getText(wiersz, 'WartoscBrutto')),
+            };
 
-                // VAT Rate P_12
-                let vatRate = 23;
-                const vatStr = extractTagValue(line, 'P_12');
-                if (vatStr && !isNaN(parseInt(vatStr))) {
-                    vatRate = parseInt(vatStr);
-                }
-
-                const totalGross = totalNet * (1 + vatRate / 100);
-                const unitPriceGross = unitPriceNet * (1 + vatRate / 100);
-
-                items.push({
-                    description,
-                    quantity,
-                    unit,
-                    unitPriceNet,
-                    unitPriceGross: Math.round(unitPriceGross * 100) / 100,
-                    totalNet,
-                    totalGross: Math.round(totalGross * 100) / 100,
-                    vatRate
-                });
+            // If gross not available, calculate from net + VAT
+            if (item.totalGross === 0 && item.totalNet > 0) {
+                const vatPercent = parseFloat(item.vatRate) || 0;
+                item.totalGross = Math.round(item.totalNet * (1 + vatPercent / 100) * 100) / 100;
             }
+
+            // If unit price gross not available, calculate
+            if (item.unitPriceGross === 0 && item.unitPriceNet > 0) {
+                const vatPercent = parseFloat(item.vatRate) || 0;
+                item.unitPriceGross = Math.round(item.unitPriceNet * (1 + vatPercent / 100) * 100) / 100;
+            }
+
+            result.items.push(item);
         }
 
-        return { items, bankAccountNumber, bankName, seller, buyer };
-
+        console.log(`[KSeF XML Parser] Parsed: ${result.items.length} items, seller=${result.seller?.nip}, buyer=${result.buyer?.nip}`);
     } catch (error) {
-        console.error('Error parsing KSeF XML:', error);
-        return { items: [], bankAccountNumber: undefined, bankName: undefined }; // Return empty data on error
+        console.error('[KSeF XML Parser] Parse error:', error);
     }
+
+    return result;
 }

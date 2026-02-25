@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# debug/test scripts (local only)
+ksef-*.ts
+ksef-*.js
+ksef-*.xml
+ksef-debug-report.md
+test-*.js
+cert-test.js
+debug.js
+find_registry.js
+replace-xades.js
+output.xml
+src/scripts/test-*.ts
+scripts/test-*.ts

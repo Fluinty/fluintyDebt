@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     FileText,
@@ -12,7 +12,10 @@ import {
     AlertTriangle,
     ExternalLink,
     Eye,
-    EyeOff
+    EyeOff,
+    Upload,
+    FileKey,
+    Shield
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,13 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+
 import {
     Dialog,
     DialogContent,
@@ -62,19 +59,31 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
     const [isSaving, setIsSaving] = useState(false);
     const [isTesting, setIsTesting] = useState(false);
     const [isSyncing, setIsSyncing] = useState(false);
-    const [showToken, setShowToken] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
     const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
 
     const [settings, setSettings] = useState<UserKSeFSettings | null>(null);
+
+    // File states
+    const [certFile, setCertFile] = useState<File | null>(null);
+    const [keyFile, setKeyFile] = useState<File | null>(null);
+    const [certPassword, setCertPassword] = useState('');
+
     const [formData, setFormData] = useState({
         ksef_environment: 'production' as KSeFEnvironment,
-        ksef_token: '',
         ksef_nip: companyNip || '',
         is_enabled: false,
         sync_frequency: 'daily' as SyncFrequency,
         sync_time: '21:00',
         auto_confirm_invoices: false,
     });
+
+    // Sync companyNip from profile into formData when it becomes available
+    useEffect(() => {
+        if (companyNip && !formData.ksef_nip) {
+            setFormData(prev => ({ ...prev, ksef_nip: companyNip }));
+        }
+    }, [companyNip]);
 
     useEffect(() => {
         loadSettings();
@@ -86,14 +95,14 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
         if (result.settings) {
             setSettings(result.settings);
             setFormData({
-                ksef_environment: result.settings.ksef_environment,
-                ksef_token: '', // Don't populate token field
+                ksef_environment: result.settings.ksef_environment as KSeFEnvironment,
                 ksef_nip: result.settings.ksef_nip || companyNip || '',
                 is_enabled: result.settings.is_enabled,
                 sync_frequency: result.settings.sync_frequency,
                 sync_time: result.settings.sync_time || '21:00',
                 auto_confirm_invoices: result.settings.auto_confirm_invoices,
             });
+            // We don't load files back, but we can set password placeholder if it exists
         } else {
             // No settings saved yet - populate NIP from profile
             setFormData(prev => ({
@@ -104,23 +113,71 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
         setIsLoading(false);
     };
 
-    const handleSave = async () => {
-        if (!formData.ksef_token && !settings?.ksef_token_encrypted) {
-            toast.error('Wprowadź token KSeF');
-            return;
-        }
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cert' | 'key') => {
+        const file = e.target.files?.[0] || null;
+        if (type === 'cert') setCertFile(file);
+        if (type === 'key') setKeyFile(file);
+    };
 
+    const handleSave = async () => {
         if (!formData.ksef_nip) {
             toast.error('Wprowadź NIP powiązany z KSeF');
             return;
         }
 
+        const isNewConfig = !settings?.ksef_cert_storage_path && !settings?.ksef_token_encrypted;
+        // Also consider re-upload if one file is missing but other present in state? 
+        // Logic: if user selects ANY file, we assume they update credentials.
+
+        // If it's a new config, ensure files are present
+        if (isNewConfig || (!settings?.ksef_cert_storage_path && !settings?.ksef_token_encrypted)) {
+            if (!certFile) {
+                toast.error('Wybierz plik certyfikatu (.crt / .pem)');
+                return;
+            }
+            if (!keyFile) {
+                toast.error('Wybierz plik klucza prywatnego (.key / .pem)');
+                return;
+            }
+        }
+
+        // If user wants to update certificate, they should probably provide both or we handle partial updates?
+        // Typically cert and key go together. If user provides one, they should provide other.
+        if ((certFile && !keyFile) || (!certFile && keyFile)) {
+            if (!settings?.ksef_cert_storage_path) { // exact logic might vary, but simplified:
+                // if strictly updating, maybe require both to avoid mismatch
+                toast.warning('Zalecane jest podanie zarówno certyfikatu jak i klucza prywatnego, aby zapewnić ich zgodność.');
+            }
+        }
+
         setIsSaving(true);
-        const result = await saveKSeFSettings(formData);
+
+        const data = new FormData();
+        data.append('ksef_environment', formData.ksef_environment);
+        data.append('ksef_nip', formData.ksef_nip);
+        data.append('is_enabled', String(formData.is_enabled));
+        data.append('sync_frequency', formData.sync_frequency);
+        data.append('sync_time', formData.sync_time);
+        data.append('auto_confirm_invoices', String(formData.auto_confirm_invoices));
+
+        // Always set format to PEM for separate files
+        data.append('ksef_cert_format', 'pem');
+
+        if (certFile) data.append('ksef_cert_file', certFile);
+        if (keyFile) data.append('ksef_key_file', keyFile);
+        if (certPassword) data.append('ksef_cert_password', certPassword);
+
+        const result = await saveKSeFSettings(data);
         setIsSaving(false);
 
         if (result.success) {
             toast.success('Ustawienia KSeF zostały zapisane');
+            // reset files inputs
+            setCertFile(null);
+            setKeyFile(null);
+            setCertPassword('');
+            // Optional: reset file input values via ref if needed, but react state null is okay for logic.
+            // visual reset of input is harder without uncontrolled component or key reset.
             await loadSettings();
         } else {
             toast.error('Błąd: ' + result.error);
@@ -146,7 +203,6 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
             setSettings(null);
             setFormData({
                 ksef_environment: 'production',
-                ksef_token: '',
                 ksef_nip: '',
                 is_enabled: false,
                 sync_frequency: 'daily',
@@ -154,6 +210,9 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                 auto_confirm_invoices: false,
             });
             setShowDisconnectDialog(false);
+            setCertFile(null);
+            setKeyFile(null);
+            setCertPassword('');
         } else {
             toast.error('Błąd: ' + result.error);
         }
@@ -169,8 +228,8 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
         );
     }
 
-    // Check if configured - settings exist and have token
-    const isConfigured = settings !== null && settings.ksef_token_encrypted && settings.ksef_token_encrypted !== '';
+    // Check if configured - based on existence of cert path
+    const isConfigured = settings !== null && (!!settings.ksef_cert_storage_path || !!settings.ksef_token_encrypted);
 
     const handleSyncNow = async () => {
         setIsSyncing(true);
@@ -209,7 +268,9 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
 
     // Check if form has changes compared to saved settings
     const hasChanges = !isConfigured || (
-        formData.ksef_token !== '' || // New token entered
+        (!!certFile) || // New file selected
+        (!!keyFile) ||
+        (!!certPassword) ||
         formData.ksef_nip !== (settings?.ksef_nip || '') ||
         formData.ksef_environment !== settings?.ksef_environment ||
         formData.is_enabled !== settings?.is_enabled ||
@@ -243,9 +304,9 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                                 <FileText className="h-5 w-5 text-primary" />
                             </div>
                             <div>
-                                <CardTitle>KSeF</CardTitle>
+                                <CardTitle>KSeF 2.0</CardTitle>
                                 <CardDescription>
-                                    Krajowy System e-Faktur
+                                    Integracja za pomocą Certyfikatu i Klucza Prywatnego
                                 </CardDescription>
                             </div>
                         </div>
@@ -264,77 +325,66 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                     </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    {/* Environment info - dynamic */}
-                    <Alert>
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertTitle>
-                            {formData.ksef_environment === 'production'
-                                ? 'Środowisko produkcyjne'
-                                : 'Środowisko testowe'}
-                        </AlertTitle>
-                        <AlertDescription>
-                            {formData.ksef_environment === 'production' ? (
-                                <>
-                                    Używasz <strong>produkcyjnego</strong> środowiska KSeF. Wszystkie operacje będą wykonywane na prawdziwych danych.
-                                    <br />
-                                    <a
-                                        href="https://ksef.mf.gov.pl/web/"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
-                                    >
-                                        Otwórz aplikację produkcyjną KSeF
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                </>
-                            ) : (
-                                <>
-                                    Zalecamy najpierw przetestować integrację na środowisku testowym KSeF.
-                                    <br />
-                                    <a
-                                        href="https://ksef-test.mf.gov.pl/aplikacja-podatnika-ksef/"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 text-primary hover:underline mt-1"
-                                    >
-                                        Otwórz aplikację testową KSeF
-                                        <ExternalLink className="h-3 w-3" />
-                                    </a>
-                                </>
-                            )}
+                    {/* Production environment — always fixed */}
+                    <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-900">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-400">Środowisko produkcyjne</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-500">
+                            Wszystkie operacje są wykonywane na prawdziwych danych w KSeF MF.{' '}
+                            <a
+                                href="https://ksef.mf.gov.pl/web/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 underline font-medium"
+                            >
+                                ksef.mf.gov.pl <ExternalLink className="h-3 w-3" />
+                            </a>
                         </AlertDescription>
                     </Alert>
 
-                    {/* Environment selector */}
-                    <div className="space-y-2">
-                        <Label>Środowisko</Label>
-                        <Select
-                            value={formData.ksef_environment}
-                            onValueChange={(value: KSeFEnvironment) =>
-                                setFormData({ ...formData, ksef_environment: value })
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="test">
-                                    🧪 Testowe (ksef-test.mf.gov.pl)
-                                </SelectItem>
-                                <SelectItem value="production">
-                                    🏢 Produkcyjne (ksef.mf.gov.pl)
-                                </SelectItem>
-                            </SelectContent>
-                        </Select>
+                    {/* Step-by-step guide */}
+                    <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
+                        <p className="text-sm font-semibold flex items-center gap-2">
+                            <span className="text-base">📋</span>
+                            Jak nadać uprawnienia i pobrać certyfikat z KSeF?
+                        </p>
+                        <ol className="text-sm text-muted-foreground space-y-2 list-none">
+                            <li className="flex gap-2">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
+                                <span>Wejdź na <a href="https://ksef.mf.gov.pl/web/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
+                            </li>
+                            <li className="flex gap-2">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
+                                <span>Przejdź do <strong>Ustawienia → Certyfikaty</strong> (lub „Zarządzanie certyfikatami").</span>
+                            </li>
+                            <li className="flex gap-2">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">3</span>
+                                <span>
+                                    Kliknij <strong>„Wygeneruj certyfikat"</strong> — wybierz typ <em>Certyfikat aplikacji</em>.{' '}
+                                    Upewnij się, że certyfikat ma uprawnienia:{' '}
+                                    <strong className="text-foreground">Odczyt faktur</strong> oraz <strong className="text-foreground">Wystawianie faktur</strong>{' '}
+                                    (w panelu KSeF: <em>Zarządzanie uprawnieniami → Dodaj aplikację</em>).
+                                </span>
+                            </li>
+                            <li className="flex gap-2">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">4</span>
+                                <span>Pobierz pliki: <strong>certyfikat (.pem lub .crt)</strong> oraz <strong>klucz prywatny (.key)</strong>. Zapisz hasło jeśli zostało ustawione.</span>
+                            </li>
+                            <li className="flex gap-2">
+                                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">5</span>
+                                <span>Wróć tutaj i wgraj oba pliki poniżej. Gotowe! 🎉</span>
+                            </li>
+                        </ol>
                     </div>
+
 
                     {/* NIP */}
                     <div className="space-y-2">
                         <Label htmlFor="ksef_nip">NIP powiązany z KSeF</Label>
                         <Input
                             id="ksef_nip"
-                            value={companyNip || formData.ksef_nip}
-                            onChange={(e) => !companyNip && setFormData({ ...formData, ksef_nip: e.target.value })}
+                            value={formData.ksef_nip}
+                            onChange={(e) => setFormData({ ...formData, ksef_nip: e.target.value })}
                             placeholder="1234567890"
                             maxLength={10}
                             readOnly={!!companyNip}
@@ -343,43 +393,78 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                         <p className="text-xs text-muted-foreground">
                             {companyNip
                                 ? 'NIP pobierany automatycznie z danych firmy (zakładka "Dane firmy")'
-                                : 'NIP firmy, dla której wygenerowany jest token'
+                                : 'NIP firmy, dla której wygenerowany jest certyfikat'
                             }
                         </p>
                     </div>
 
-                    {/* Token */}
+                    {/* Certificate and Key Upload */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="ksef_cert" className="flex items-center gap-2">
+                                <Upload className="h-4 w-4" />
+                                Certyfikat (Publiczny)
+                                {isConfigured && settings?.ksef_cert_storage_path && (
+                                    <Check className="h-4 w-4 text-green-500" />
+                                )}
+                            </Label>
+                            <Input
+                                id="ksef_cert"
+                                type="file"
+                                accept=".crt,.pem,.cer"
+                                onChange={(e) => handleFileChange(e, 'cert')}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Format: .pem, .crt (Klucz publiczny)
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="ksef_key" className="flex items-center gap-2">
+                                <FileKey className="h-4 w-4" />
+                                Klucz Prywatny
+                                {isConfigured && settings?.ksef_key_storage_path && (
+                                    <Check className="h-4 w-4 text-green-500" />
+                                )}
+                            </Label>
+                            <Input
+                                id="ksef_key"
+                                type="file"
+                                accept=".key,.pem"
+                                onChange={(e) => handleFileChange(e, 'key')}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Format: .pem, .key (Klucz prywatny)
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Private Key Password */}
                     <div className="space-y-2">
-                        <Label htmlFor="ksef_token">
-                            Token autoryzacyjny
-                            {isConfigured && (
-                                <span className="ml-2 text-green-600 font-normal">
-                                    (zapisany)
-                                </span>
-                            )}
+                        <Label htmlFor="ksef_password" className="flex items-center gap-2">
+                            <Shield className="h-4 w-4" />
+                            Hasło klucza prywatnego (opcjonalne)
                         </Label>
-                        <div className="flex gap-2">
-                            <div className="relative flex-1">
-                                <Input
-                                    id="ksef_token"
-                                    type={showToken ? 'text' : 'password'}
-                                    value={formData.ksef_token}
-                                    onChange={(e) => setFormData({ ...formData, ksef_token: e.target.value })}
-                                    placeholder={isConfigured ? '••••••••••••' : 'Wklej token z aplikacji KSeF'}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="absolute right-1 top-1/2 -translate-y-1/2"
-                                    onClick={() => setShowToken(!showToken)}
-                                >
-                                    {showToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </Button>
-                            </div>
+                        <div className="relative">
+                            <Input
+                                id="ksef_password"
+                                type={showPassword ? 'text' : 'password'}
+                                value={certPassword}
+                                onChange={(e) => setCertPassword(e.target.value)}
+                                placeholder={isConfigured && settings?.ksef_cert_password_encrypted ? '••••••••' : 'Wpisz hasło klucza jeśli jest wymagane'}
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="absolute right-1 top-1/2 -translate-y-1/2"
+                                onClick={() => setShowPassword(!showPassword)}
+                            >
+                                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            Token jest przechowywany w bezpieczny sposób. {isConfigured ? 'Zostaw puste, aby nie zmieniać.' : ''}
+                            Wymagane tylko jeśli Twój klucz prywatny jest zabezpieczony hasłem.
                         </p>
                     </div>
 
@@ -509,7 +594,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                                             <DialogTitle>Rozłącz KSeF?</DialogTitle>
                                             <DialogDescription>
                                                 Czy na pewno chcesz usunąć konfigurację KSeF?
-                                                Token zostanie usunięty i automatyczny import faktur zostanie wyłączony.
+                                                Certyfikaty zostaną usunięte i automatyczny import faktur zostanie wyłączony.
                                             </DialogDescription>
                                         </DialogHeader>
                                         <DialogFooter>
