@@ -7,7 +7,6 @@ import {
     FileText,
     Users,
     GitBranch,
-    Sparkles,
     Settings,
     ChevronDown,
     LogOut,
@@ -61,11 +60,7 @@ const navigation: NavGroup[] = [
         title: "SPRZEDAŻ",
         module: "sales",
         items: [
-            {
-                name: 'Należności',
-                href: '/invoices',
-                icon: FileText,
-            },
+            { name: 'Należności', href: '/invoices', icon: FileText },
             { name: 'Kontrahenci', href: '/debtors', icon: Users },
             { name: 'Raporty', href: '/invoices/reports', icon: BarChart3 },
             { name: 'Sekwencje', href: '/sequences', icon: GitBranch },
@@ -84,7 +79,6 @@ const navigation: NavGroup[] = [
     {
         title: "NARZĘDZIA",
         items: [
-            // { name: 'Generator AI', href: '/ai-generator', icon: Sparkles }, // Hidden - Coming later
             { name: 'Historia', href: '/history', icon: History },
             { name: 'Ustawienia', href: '/settings', icon: Settings },
         ],
@@ -95,8 +89,10 @@ export function Sidebar({ user, profile }: SidebarProps) {
     const pathname = usePathname();
     const router = useRouter();
 
-    // Default to sales=true if modules not set (legacy)
-    const userModules = profile?.modules || { sales: true, costs: false };
+    // If profile.modules is null (new user / not loaded yet), treat ALL modules as enabled
+    // to prevent flash of locked state right after signup
+    const userModulesRaw = profile?.modules as Record<string, boolean> | null | undefined;
+    const isModuleEnabled = (mod: string) => userModulesRaw ? userModulesRaw[mod] !== false : true;
 
     const handleLogout = async () => {
         const supabase = createClient();
@@ -107,12 +103,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
 
     const getInitials = (name: string | null | undefined, email: string) => {
         if (name) {
-            return name
-                .split(' ')
-                .map((n) => n[0])
-                .join('')
-                .toUpperCase()
-                .slice(0, 2);
+            return name.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2);
         }
         return email.slice(0, 2).toUpperCase();
     };
@@ -133,8 +124,7 @@ export function Sidebar({ user, profile }: SidebarProps) {
                 {/* Navigation */}
                 <nav className="flex-1 px-4 py-4 space-y-6">
                     {navigation.map((group, groupIndex) => {
-                        // Check if group is locked
-                        const isLocked = group.module ? !userModules[group.module] : false;
+                        const isLocked = group.module ? !isModuleEnabled(group.module) : false;
 
                         return (
                             <div key={groupIndex}>
@@ -150,8 +140,6 @@ export function Sidebar({ user, profile }: SidebarProps) {
                                 <div className="space-y-1">
                                     {group.items.map((item) => {
                                         const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-
-                                        // If locked, link to upsell page, otherwise normal href
                                         const href = isLocked ? `/upsell?module=${group.module}` : item.href;
 
                                         if (item.children && !isLocked) {

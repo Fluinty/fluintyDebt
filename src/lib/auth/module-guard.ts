@@ -18,10 +18,11 @@ export async function requireModule(moduleName: Module) {
         .eq('id', user.id)
         .single();
 
-    // Default: Sales=true, Costs=false (legacy behavior)
-    const modules = (profile as Profile)?.modules || { sales: true, costs: false };
+    // Default: all modules enabled if profile has no modules set yet (race condition after signup)
+    const modules = (profile as Profile)?.modules as Record<string, boolean> | null;
+    const hasModule = modules ? modules[moduleName] !== false : true;
 
-    if (!modules[moduleName]) {
+    if (!hasModule) {
         redirect(`/upsell?module=${moduleName}`);
     }
 }
