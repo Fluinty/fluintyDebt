@@ -43,30 +43,37 @@ export function validateNip(nip: string): boolean {
 }
 
 /**
- * Parse address into components
+ * Parse address into components, splitting street from building number.
+ * GUS format: "ul. Nazwa Ulicy 12A/3, 00-000 Miasto"
  */
-function parseAddress(fullAddress: string): { address: string; city: string; postal_code: string } {
-    // Address format from API: "ul. Nazwa 123, 00-000 Miasto"
-    // or "Nazwa 123, 00-000 Miasto"
-
+function parseAddress(fullAddress: string): { address: string; street: string; street_number: string; city: string; postal_code: string } {
     const postalMatch = fullAddress.match(/(\d{2}-\d{3})\s+(.+?)$/);
 
-    if (postalMatch) {
-        const postal_code = postalMatch[1];
-        const city = postalMatch[2].trim();
-        const addressPart = fullAddress.replace(/,?\s*\d{2}-\d{3}\s+.+$/, '').trim();
+    let postal_code = '';
+    let city = '';
+    let addressPart = fullAddress;
 
-        return {
-            address: addressPart,
-            city: city,
-            postal_code: postal_code,
-        };
+    if (postalMatch) {
+        postal_code = postalMatch[1];
+        city = postalMatch[2].trim();
+        addressPart = fullAddress.replace(/,?\s*\d{2}-\d{3}\s+.+$/, '').trim();
     }
 
+    // Remove "ul.", "al.", "pl." prefix
+    const cleanedStreet = addressPart.replace(/^(ul\.|al\.|pl\.|Os\.|os\.)\s*/i, '').trim();
+
+    // Split "Nazwa Ulicy 12A/3" → street "Nazwa Ulicy" + number "12A/3"
+    // Building number pattern: ends with digits, optionally followed by letters and /apartment
+    const numberMatch = cleanedStreet.match(/^(.*?)\s+(\d+[a-zA-Z]?(?:\/\d+[a-zA-Z]?)?)$/);
+    const street = numberMatch ? numberMatch[1].trim() : cleanedStreet;
+    const street_number = numberMatch ? numberMatch[2].trim() : '';
+
     return {
-        address: fullAddress,
-        city: '',
-        postal_code: '',
+        address: addressPart,   // full (legacy compat)
+        street,
+        street_number,
+        city,
+        postal_code,
     };
 }
 
@@ -126,6 +133,8 @@ export async function lookupCompanyByNip(nip: string): Promise<GusLookupResult> 
             regon: subject.regon || undefined,
             krs: subject.krs || undefined,
             address: parsedAddress.address,
+            street: parsedAddress.street,
+            street_number: parsedAddress.street_number,
             city: parsedAddress.city,
             postal_code: parsedAddress.postal_code,
             working_address: workingAddress,

@@ -7,7 +7,9 @@ export interface CompanyData {
     nip: string;
     regon?: string;
     krs?: string;
-    address: string;
+    address: string;        // full street + number (legacy)
+    street?: string;        // street name only
+    street_number?: string; // building/apt number
     city: string;
     postal_code: string;
     working_address?: string;

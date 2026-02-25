@@ -108,7 +108,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                 setCompanyData({
                     ...companyData,
                     name: result.data.name || companyData.name,
-                    street: result.data.address || companyData.street,
+                    street: result.data.street || result.data.address || companyData.street,
+                    street_number: result.data.street_number || companyData.street_number,
                     city: result.data.city || companyData.city,
                     postal_code: result.data.postal_code || companyData.postal_code,
                 });
@@ -207,8 +208,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
         onComplete();
     };
 
-    // Validation for Step 1 - only name is truly required
-    const canProceedStep1 = companyData.name.trim().length > 0;
+    // Validation for Step 1
+    const cleanNip = companyData.nip.replace(/\D/g, '');
+    const cleanBankAccount = companyData.bank_account.replace(/[\s-]/g, '');
+    const isBankAccountValid = cleanBankAccount.length === 0 || cleanBankAccount.length === 26 || (cleanBankAccount.toUpperCase().startsWith('PL') && cleanBankAccount.length === 28);
+
+    const canProceedStep1 = companyData.name.trim().length > 0 && cleanNip.length >= 10 && isBankAccountValid;
 
     return (
         <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
@@ -248,15 +253,6 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="company_name">Nazwa firmy *</Label>
-                                    <Input
-                                        id="company_name"
-                                        value={companyData.name}
-                                        onChange={(e) => setCompanyData({ ...companyData, name: e.target.value })}
-                                        placeholder="Twoja Firma Sp. z o.o."
-                                    />
-                                </div>
-                                <div className="space-y-2">
                                     <Label htmlFor="company_nip">NIP *</Label>
                                     <div className="flex gap-2">
                                         <Input
@@ -264,7 +260,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             value={companyData.nip}
                                             onChange={(e) => setCompanyData({ ...companyData, nip: e.target.value })}
                                             placeholder="1234567890"
-                                            maxLength={10}
+                                            maxLength={15}
                                         />
                                         <Button
                                             type="button"
@@ -283,6 +279,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     <p className="text-xs text-muted-foreground">
                                         Wpisz NIP i kliknij lupę, aby pobrać dane z GUS
                                     </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="company_name">Nazwa firmy *</Label>
+                                    <Input
+                                        id="company_name"
+                                        value={companyData.name}
+                                        onChange={(e) => setCompanyData({ ...companyData, name: e.target.value })}
+                                        placeholder="Twoja Firma Sp. z o.o."
+                                    />
                                 </div>
                             </div>
                             <div className="grid grid-cols-3 gap-4">
@@ -332,8 +337,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                     value={companyData.bank_account}
                                     onChange={(e) => setCompanyData({ ...companyData, bank_account: e.target.value })}
                                     placeholder="XX XXXX XXXX XXXX XXXX XXXX XXXX"
-                                    maxLength={32}
+                                    maxLength={34}
+                                    className={!isBankAccountValid ? 'border-red-500 focus-visible:ring-red-500' : ''}
                                 />
+                                {!isBankAccountValid && (
+                                    <p className="text-xs text-red-500">
+                                        Numer konta musi składać się z 26 cyfr (lub 28 znaków z prefiksem PL)
+                                    </p>
+                                )}
                             </div>
                         </div>
                     )}
