@@ -5,8 +5,11 @@
 
 -- 1. Add certificate columns to user_ksef_settings
 ALTER TABLE user_ksef_settings
-ADD COLUMN IF NOT EXISTS ksef_cert_storage_path text,
-ADD COLUMN IF NOT EXISTS ksef_cert_password_encrypted text;
+ADD COLUMN IF NOT EXISTS ksef_cert_format VARCHAR(10) DEFAULT 'token',
+ADD COLUMN IF NOT EXISTS ksef_cert_storage_path TEXT,
+ADD COLUMN IF NOT EXISTS ksef_key_storage_path TEXT,
+ADD COLUMN IF NOT EXISTS ksef_p12_storage_path TEXT,
+ADD COLUMN IF NOT EXISTS ksef_cert_password_encrypted TEXT;
 
 -- 2. Migrate existing test environments to production (BEFORE constraint change)
 UPDATE user_ksef_settings
