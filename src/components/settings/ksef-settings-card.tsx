@@ -265,6 +265,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
         }
     };
     const isSyncInProgress = isSyncing;
+    const isBlocking = isSyncing || isTesting;
 
     // Check if form has changes compared to saved settings
     const hasChanges = !isConfigured || (
@@ -282,15 +283,26 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
     return (
         <>
             {/* Full-page loading overlay */}
-            {isSyncInProgress && (
+            {isBlocking && (
                 <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-4 p-8 rounded-lg bg-card border shadow-lg">
                         <Loader2 className="h-12 w-12 animate-spin text-primary" />
                         <div className="text-center">
-                            <p className="text-lg font-semibold">Synchronizacja z KSeF...</p>
-                            <p className="text-sm text-muted-foreground">
-                                Pobieranie faktur. To może potrwać kilka sekund.
-                            </p>
+                            {isTesting ? (
+                                <>
+                                    <p className="text-lg font-semibold">Testowanie połączenia z KSeF...</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Sprawdzanie certyfikatu i uprawnień.
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <p className="text-lg font-semibold">Synchronizacja z KSeF...</p>
+                                    <p className="text-sm text-muted-foreground">
+                                        Pobieranie faktur. To może potrwać kilka sekund.
+                                    </p>
+                                </>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -578,7 +590,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                                     ) : (
                                         <FileText className="h-4 w-4 mr-2" />
                                     )}
-                                    Pobierz faktury (1 dzień)
+                                    Pobierz ostatnie faktury
                                 </Button>
 
                                 <Dialog open={showDisconnectDialog} onOpenChange={setShowDisconnectDialog}>
