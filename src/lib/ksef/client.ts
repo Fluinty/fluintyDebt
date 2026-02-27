@@ -1018,16 +1018,7 @@ export class KSeFClient {
 
         } catch (error) {
             console.error('[KSeF] Fetch invoices failed:', error);
-            return {
-                timestamp: new Date().toISOString(),
-                referenceNumber: 'ERROR',
-                processingCode: 500,
-                processingDescription: error instanceof Error ? error.message : 'Unknown error',
-                numberOfElements: 0,
-                pageSize: params.pageSize || 100,
-                pageOffset: params.pageOffset || 0,
-                invoiceHeaderList: [],
-            };
+            throw error; // Propagate real error message up
         }
     }
 

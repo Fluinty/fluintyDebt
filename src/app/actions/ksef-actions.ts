@@ -8,7 +8,7 @@ import { lookupCompanyByNip } from '@/lib/gus/gus-client';
 import { parseKSeFXml } from '@/lib/ksef/xml-parser';
 import { encrypt, decrypt } from '@/lib/ksef/encryption';
 import type { KSeFEnvironment, UserKSeFSettings } from '@/lib/ksef/types';
-
+import { syncKSeFCostInvoices } from './ksef-costs-actions';
 /**
  * Get user's KSeF settings
  */
@@ -799,14 +799,45 @@ export async function syncKSeFInvoices(
             console.log('[Sync] Sales sync skipped.');
         }
 
+        // --- COSTS INVOICES SYNC ---
+        let costsImported = 0;
+        let costsFound = 0;
+        let costsMessage = '';
+
+        if (shouldSyncCosts) {
+            console.log('[Sync] Starting cost invoices sync...');
+            try {
+                // We pass maxInvoices / 2 or something if we want, but let's just use maxInvoices
+                const costResult = await syncKSeFCostInvoices(daysBack, maxInvoices ? Math.ceil(maxInvoices / 2) : undefined);
+                if (costResult.success) {
+                    costsImported = costResult.invoicesImported || 0;
+                    costsFound = costResult.invoicesFound || 0;
+                    costsMessage = costResult.warning || '';
+                    console.log(`[Sync] Cost sync completed: ${costsImported} imported out of ${costsFound}`);
+                } else {
+                    console.error('[Sync] Cost sync failed:', costResult.error);
+                    costsMessage = costResult.error || 'Unknown cost sync error';
+                }
+            } catch (err: any) {
+                console.error('[Sync] Exception in cost sync:', err);
+                costsMessage = err.message;
+            }
+        } else {
+            console.log('[Sync] Costs sync skipped.');
+        }
+
+        // Combine totals
+        const totalImported = invoicesImported + costsImported;
+        const totalFound = invoicesFound + costsFound;
+
         // Update sync status
         await supabase
             .from('user_ksef_settings')
             .update({
                 last_sync_at: new Date().toISOString(),
                 last_sync_status: 'success',
-                last_sync_error: null,
-                invoices_synced_count: (settings.invoices_synced_count || 0) + invoicesImported,
+                last_sync_error: costsMessage || null,
+                invoices_synced_count: (settings.invoices_synced_count || 0) + totalImported,
             })
             .eq('user_id', user.id);
 
@@ -815,17 +846,19 @@ export async function syncKSeFInvoices(
             user_id: user.id,
             action: 'sync_completed',
             metadata: {
-                invoices_found: invoicesFound,
-                invoices_imported: invoicesImported,
+                invoices_found: totalFound,
+                invoices_imported: totalImported,
+                sales_imported: invoicesImported,
+                costs_imported: costsImported,
             },
         });
 
         return {
             success: true,
-            invoicesFound,
-            invoicesImported,
+            invoicesFound: totalFound,
+            invoicesImported: totalImported,
             salesImported: invoicesImported,
-            costsImported: 0,
+            costsImported: costsImported,
         };
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';

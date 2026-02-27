@@ -50,12 +50,13 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
         .eq('id', user.id)
         .single();
 
-    // Default to false if not set, but handle legacy profiles
+    // Default to true. If user doesn't have explicit false, sync costs.
     const hasCostModule = profile?.modules
-        ? (profile.modules as any).costs === true
-        : false;
+        ? (profile.modules as any).costs !== false
+        : true;
 
     if (!hasCostModule) {
+        console.log('[Costs Sync] Skipped: module inactive in profile');
         return { success: true, invoicesImported: 0, warning: 'Moduł kosztowy nie jest aktywny' };
     }
 
