@@ -139,6 +139,10 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                 toast.error('Wybierz plik klucza prywatnego (.key / .pem)');
                 return;
             }
+            if (!certPassword || certPassword.trim().length === 0) {
+                toast.error('Hasło do certyfikatu jest wymagane');
+                return;
+            }
         }
 
         // If user wants to update certificate, they should probably provide both or we handle partial updates?

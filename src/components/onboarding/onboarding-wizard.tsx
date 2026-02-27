@@ -148,6 +148,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
             toast.error('Wymagany plik .p12');
             return;
         }
+        if (!certPassword || certPassword.trim().length === 0) {
+            toast.error('Hasło do certyfikatu jest wymagane');
+            return;
+        }
 
         setIsConnectingKsef(true);
         try {
