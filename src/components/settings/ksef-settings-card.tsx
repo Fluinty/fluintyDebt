@@ -362,32 +362,32 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                     <div className="rounded-lg border bg-muted/40 p-4 space-y-3">
                         <p className="text-sm font-semibold flex items-center gap-2">
                             <span className="text-base">📋</span>
-                            Jak nadać uprawnienia i pobrać certyfikat z KSeF?
+                            Jak uzyskać certyfikat z KSeF?
                         </p>
                         <ol className="text-sm text-muted-foreground space-y-2 list-none">
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
-                                <span>Wejdź na <a href="https://ap.ksef.mf.gov.pl/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
+                                <span>Wejdź na <a href="https://ap.ksef.mf.gov.pl/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ap.ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany, e-dowód lub kwalifikowany podpis elektroniczny.</span>
                             </li>
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
-                                <span>Przejdź do <strong>Ustawienia → Certyfikaty</strong> (lub „Zarządzanie certyfikatami").</span>
+                                <span>Wprowadź <strong>NIP firmy</strong> i uwierzytelnij się w systemie.</span>
                             </li>
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">3</span>
                                 <span>
-                                    Kliknij <strong>„Wygeneruj certyfikat"</strong> — wybierz typ <em>Certyfikat aplikacji</em>.{' '}
-                                    Wystarczy uprawnienie <strong className="text-foreground">Odczyt faktur</strong>{' '}
-                                    — FluintyDebt tylko pobiera faktury, nie wystawia ich.
+                                    W menu wybierz <strong>Certyfikaty → Wnioskuj o certyfikat</strong>.{' '}
+                                    Nadaj nazwę (5–50 znaków, bez polskich liter) i ustaw hasło.{' '}
+                                    <strong className="text-foreground">Zapisz hasło — nie można go odzyskać!</strong>
                                 </span>
                             </li>
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">4</span>
-                                <span>Pobierz pliki: <strong>certyfikat (.pem lub .crt)</strong> oraz <strong>klucz prywatny (.key)</strong>. Zapisz hasło jeśli zostało ustawione.</span>
+                                <span>Wybierz przeznaczenie certyfikatu i kliknij <strong>Wyślij wniosek o wydanie certyfikatu</strong>. Poczekaj kilka minut na przetworzenie.</span>
                             </li>
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">5</span>
-                                <span>Wróć tutaj i wgraj oba pliki poniżej. Gotowe! 🎉</span>
+                                <span>Pobierz pliki: <strong>certyfikat (.crt)</strong> i <strong>klucz prywatny (.key)</strong> — wgraj je poniżej razem z hasłem. Gotowe! 🎉</span>
                             </li>
                         </ol>
                     </div>
