@@ -25,7 +25,7 @@ import { Progress } from '@/components/ui/progress';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { toast } from 'sonner';
 import { fetchCompanyByNip } from '@/app/actions/gus-actions';
-import { saveKSeFSettings } from '@/app/actions/ksef-actions';
+import { saveKSeFSettings, syncKSeFInvoices } from '@/app/actions/ksef-actions';
 import type { KSeFEnvironment } from '@/lib/ksef/types';
 
 interface OnboardingWizardProps {
@@ -73,6 +73,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
     const [certPassword, setCertPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [isConnectingKsef, setIsConnectingKsef] = useState(false);
+    const [isSyncingAfterCert, setIsSyncingAfterCert] = useState(false);
 
     const progress = (currentStep / steps.length) * 100;
 
@@ -170,7 +171,27 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
             if (result.success) {
                 setKsefData({ isConfigured: true, skipSetup: false });
-                toast.success('KSeF połączony pomyślnie! Certyfikat zweryfikowany przez Ministerstwo Finansów. ✅');
+                toast.success('KSeF połączony pomyślnie! ✅ Trwa pobieranie faktur z ostatnich 30 dni...');
+
+                // Auto-sync last 30 days — block UI with spinner while loading
+                setIsSyncingAfterCert(true);
+                try {
+                    const syncResult = await syncKSeFInvoices(30);
+                    if (syncResult.success) {
+                        const count = syncResult.invoicesImported || 0;
+                        if (count > 0) {
+                            toast.success(`Pobrano ${count} faktur z KSeF za ostatnie 30 dni 🎉`);
+                        } else {
+                            toast.info('Brak nowych faktur w KSeF za ostatnie 30 dni.');
+                        }
+                    } else {
+                        toast.warning('KSeF podłączony, ale synchronizacja nie powiodła się: ' + syncResult.error);
+                    }
+                } catch {
+                    toast.warning('KSeF podłączony, ale wystąpił błąd podczas pobierania faktur.');
+                } finally {
+                    setIsSyncingAfterCert(false);
+                }
             } else {
                 toast.error('Błąd połączenia z KSeF: ' + (result.error || 'Sprawdź certyfikat i klucz prywatny'));
             }
@@ -217,6 +238,25 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
 
     return (
         <div className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            {/* Blocking overlay during cert upload/validation AND post-cert sync — user cannot interact */}
+            {(isConnectingKsef || isSyncingAfterCert) && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-4">
+                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                    <div className="text-center">
+                        {isConnectingKsef && !isSyncingAfterCert ? (
+                            <>
+                                <p className="font-semibold text-lg">Weryfikacja certyfikatu...</p>
+                                <p className="text-sm text-muted-foreground mt-1">Łączymy się z KSeF i sprawdzamy certyfikat. Chwilę poczekaj.</p>
+                            </>
+                        ) : (
+                            <>
+                                <p className="font-semibold text-lg">Pobieranie faktur z KSeF...</p>
+                                <p className="text-sm text-muted-foreground mt-1">Trwa synchronizacja ostatnich 30 dni. Chwilę poczekaj.</p>
+                            </>
+                        )}
+                    </div>
+                </div>
+            )}
             <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
                 <CardHeader className="text-center pb-2">
                     <div className="flex justify-center gap-2 mb-4">
@@ -363,7 +403,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                         <ol className="text-sm text-muted-foreground space-y-2 list-none">
                                             <li className="flex gap-2">
                                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
-                                                <span>Wejdź na <a href="https://ksef.mf.gov.pl/web/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
+                                                <span>Wejdź na <a href="https://ap.ksef.mf.gov.pl/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
                                             </li>
                                             <li className="flex gap-2">
                                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>

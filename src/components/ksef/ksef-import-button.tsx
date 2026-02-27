@@ -36,7 +36,7 @@ export function KSeFImportButton({
 
         setIsLoading(true);
         try {
-            const result = await syncKSeFInvoices(7, undefined, syncMode); // Sync last 7 days
+            const result = await syncKSeFInvoices(30, undefined, syncMode); // Sync last 30 days (dedup skips existing)
 
             if (result.success) {
                 let message = '';
@@ -81,7 +81,7 @@ export function KSeFImportButton({
                                 className={`opacity-50 ${className}`}
                             >
                                 <DownloadCloud className="w-4 h-4 mr-2" />
-                                Import z KSeF
+                                Pobierz nowe faktury
                             </Button>
                         </span>
                     </TooltipTrigger>
@@ -106,7 +106,7 @@ export function KSeFImportButton({
             ) : (
                 <DownloadCloud className="w-4 h-4 mr-2" />
             )}
-            Import z KSeF
+            Pobierz nowe faktury
         </Button>
     );
 }

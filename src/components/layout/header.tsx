@@ -11,8 +11,6 @@ import {
     Plus,
     X,
     LogOut,
-    Settings,
-    User,
     Sun,
     Moon,
     Mail,
@@ -150,19 +148,6 @@ export function Header({ user, profile }: HeaderProps) {
                                     <p className="text-sm font-medium">{profile?.full_name || user.email}</p>
                                     <p className="text-xs text-muted-foreground">{profile?.company_name}</p>
                                 </div>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem asChild>
-                                    <Link href="/settings">
-                                        <User className="mr-2 h-4 w-4" />
-                                        Profil
-                                    </Link>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem asChild>
-                                    <Link href="/settings">
-                                        <Settings className="mr-2 h-4 w-4" />
-                                        Ustawienia
-                                    </Link>
-                                </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                                     <LogOut className="mr-2 h-4 w-4" />

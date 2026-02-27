@@ -223,13 +223,6 @@ export function Sidebar({ user, profile }: SidebarProps) {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuItem asChild>
-                                <Link href="/settings">
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    Ustawienia
-                                </Link>
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleLogout} className="text-red-600">
                                 <LogOut className="mr-2 h-4 w-4" />
                                 Wyloguj się

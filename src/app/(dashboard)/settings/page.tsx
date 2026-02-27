@@ -356,69 +356,19 @@ export default function SettingsPage() {
                 </TabsContent>
 
                 <TabsContent value="preferences" className="space-y-6">
-                    <Card>
+                    <Card className="opacity-70">
                         <CardHeader>
-                            <CardTitle>Powiadomienia</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <p className="font-medium">Email potwierdzający płatność</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Automatycznie wysyłaj podziękowanie po otrzymaniu płatności
-                                    </p>
-                                </div>
-                                <Switch
-                                    checked={profile.send_thank_you_on_payment}
-                                    onCheckedChange={(checked) => setProfile({ ...profile, send_thank_you_on_payment: checked })}
-                                />
+                                <CardTitle>Powiadomienia</CardTitle>
+                                <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full border">WKRÓTCE</span>
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Szablon emaila z podziękowaniem</CardTitle>
                             <CardDescription>
-                                Skonfiguruj treść wiadomości wysyłanej po otrzymaniu płatności
+                                Automatyczne emaile po otrzymaniu płatności i inne powiadomienia — wkrótce dostępne.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            {!profile.send_thank_you_on_payment && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg text-sm text-yellow-800 dark:text-yellow-200 mb-4 border border-yellow-200 dark:border-yellow-900">
-                                    ⚠️ Wysyłka podziękowań jest obecnie wyłączona. Włącz ją w sekcji powyżej.
-                                </div>
-                            )}
-                            <div className="space-y-2">
-                                <Label>Temat wiadomości</Label>
-                                <Input
-                                    value={profile.thank_you_email_subject || ''}
-                                    onChange={(e) => setProfile({ ...profile, thank_you_email_subject: e.target.value })}
-                                    placeholder="np. Dziękujemy za wpłatę - {{invoice_number}}"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Treść wiadomości</Label>
-                                <textarea
-                                    className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                    value={profile.thank_you_email_body || ''}
-                                    onChange={(e) => setProfile({ ...profile, thank_you_email_body: e.target.value })}
-                                    placeholder="Treść emaila..."
-                                />
-                            </div>
-                            <div className="bg-muted/50 p-4 rounded-lg">
-                                <p className="text-sm font-medium mb-2">Dostępne zmienne:</p>
-                                <div className="flex flex-wrap gap-2">
-                                    {['{{debtor_name}}', '{{invoice_number}}', '{{amount}}', '{{company_name}}'].map((ph) => (
-                                        <div key={ph} className="bg-secondary px-2 py-1 rounded text-xs font-mono">
-                                            {ph}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </CardContent>
                     </Card>
                 </TabsContent>
+
 
                 <TabsContent value="communication" className="space-y-6">
                     <Card>
@@ -495,40 +445,8 @@ export default function SettingsPage() {
                 <TabsContent value="integrations" className="space-y-6">
                     <KSeFSettingsCard companyNip={profile.company_nip} />
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Inne integracje</CardTitle>
-                            <CardDescription>
-                                Połącz z zewnętrznymi usługami
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
-                                <div>
-                                    <p className="font-medium">PayU / Przelewy24</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Płatności online w wezwaniach
-                                    </p>
-                                </div>
-                                <Button variant="outline" disabled>
-                                    Wkrótce
-                                </Button>
-                            </div>
-                            <div className="flex items-center justify-between p-4 border rounded-lg">
-                                <div>
-                                    <p className="font-medium">SendGrid / Resend</p>
-                                    <p className="text-sm text-muted-foreground">
-                                        Wysyłka emaili
-                                    </p>
-                                </div>
-                                <Button variant="outline" disabled>
-                                    Wkrótce
-                                </Button>
-                            </div>
-                        </CardContent>
-                    </Card>
                 </TabsContent>
-            </Tabs>
-        </div>
+            </Tabs >
+        </div >
     );
 }

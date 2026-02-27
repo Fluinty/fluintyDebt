@@ -234,7 +234,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
     const handleSyncNow = async () => {
         setIsSyncing(true);
         try {
-            const result = await syncKSeFInvoices(1); // Last 1 day
+            const result = await syncKSeFInvoices(30); // Last 30 days (dedup skips existing)
             if (result.success) {
                 if (result.warning) {
                     toast.warning(result.warning);
@@ -332,7 +332,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                         <AlertDescription className="text-amber-700 dark:text-amber-500">
                             Wszystkie operacje są wykonywane na prawdziwych danych w KSeF MF.{' '}
                             <a
-                                href="https://ksef.mf.gov.pl/web/"
+                                href="https://ap.ksef.mf.gov.pl/"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1 underline font-medium"
@@ -351,7 +351,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                         <ol className="text-sm text-muted-foreground space-y-2 list-none">
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">1</span>
-                                <span>Wejdź na <a href="https://ksef.mf.gov.pl/web/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
+                                <span>Wejdź na <a href="https://ap.ksef.mf.gov.pl/" target="_blank" rel="noopener noreferrer" className="text-primary underline">ksef.mf.gov.pl</a> i zaloguj się przez profil zaufany lub e-dowód.</span>
                             </li>
                             <li className="flex gap-2">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs flex items-center justify-center font-bold">2</span>
