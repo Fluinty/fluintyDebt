@@ -234,7 +234,7 @@ export async function saveKSeFSettings(formData: FormData): Promise<{
 /**
  * Helper to get initialized KSeF Client
  */
-async function getKSeFClientForUser(userId: string) {
+export async function getKSeFClientForUser(userId: string) {
     const supabase = await createClient();
 
     const { data: settings } = await supabase
@@ -598,22 +598,13 @@ export async function syncKSeFInvoices(
                     break;
                 }
 
-                // KSeF 2.0 API uses 'seller' and 'buyer' structure
-                // Old format: subjectBy.issuedByIdentifier.identifier
-                // New format: seller.nip
-                // Also check for nested structures
+                // KSeF 2.0: Subject1 = my invoices as seller. No extra NIP filter needed.
+                // Extract seller NIP just for logging
                 const inv = invoiceHeader as unknown as Record<string, unknown>;
                 const sellerNip = invoiceHeader.seller?.nip ||
                     invoiceHeader.sellerNip ||
                     (inv.seller as Record<string, unknown>)?.nip as string;
-
-                // Filter: Only import invoices where OUR NIP is the seller (sales invoices)
-                if (sellerNip && sellerNip !== settings.ksef_nip) {
-                    // This is a purchase invoice (we are the buyer), skip it
-                    // console.log('[Sync] Skipping - seller NIP mismatch:', sellerNip, 'vs', settings.ksef_nip);
-                    invoicesSkipped++;
-                    continue;
-                }
+                console.log(`[Sync] Invoice seller NIP: ${sellerNip}, my NIP: ${settings.ksef_nip}`);
 
                 // KSeF 2.0 uses ksefNumber, 1.0 uses ksefReferenceNumber
                 const ksefRef = invoiceHeader.ksefReferenceNumber || invoiceHeader.ksefNumber || '';

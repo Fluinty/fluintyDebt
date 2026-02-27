@@ -1,9 +1,8 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { createKSeFClient } from '@/lib/ksef/client';
+import { getKSeFClientForUser } from '@/app/actions/ksef-actions';
 import { parseKSeFXml } from '@/lib/ksef/xml-parser';
-import type { KSeFEnvironment } from '@/lib/ksef/types';
 
 // Helper to decrypt token (same as in ksef-actions.ts)
 function decryptToken(encryptedToken: string): string {
@@ -40,8 +39,8 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
         .eq('user_id', user.id)
         .single();
 
-    if (!settings || !settings.ksef_token_encrypted) {
-        return { success: false, error: 'Brak skonfigurowanego tokena KSeF' };
+    if (!settings || (!settings.ksef_token_encrypted && !settings.ksef_cert_storage_path)) {
+        return { success: false, error: 'Brak skonfigurowanego połączenia z KSeF' };
     }
 
     // Check if user has cost module enabled
@@ -61,8 +60,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
     }
 
     try {
-        const decryptedToken = decryptToken(settings.ksef_token_encrypted);
-        const client = createKSeFClient(decryptedToken, settings.ksef_environment as KSeFEnvironment);
+        const client = await getKSeFClientForUser(user.id);
 
         const dateTo = new Date();
         const dateFrom = new Date();
