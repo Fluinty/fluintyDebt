@@ -39,6 +39,28 @@ export async function getProfile() {
             .single();
 
         if (error) throw error;
+
+        // Backfill from auth metadata if profile fields are missing
+        const meta = user.user_metadata || {};
+        let needsUpdate = false;
+        const updates: Record<string, string> = {};
+
+        if (!data.full_name && meta.full_name) {
+            data.full_name = meta.full_name;
+            updates.full_name = meta.full_name;
+            needsUpdate = true;
+        }
+        if (!data.company_name && meta.company_name) {
+            data.company_name = meta.company_name;
+            updates.company_name = meta.company_name;
+            needsUpdate = true;
+        }
+
+        // Persist backfilled values to DB so future loads are fast
+        if (needsUpdate) {
+            await supabase.from('profiles').update(updates).eq('id', user.id);
+        }
+
         return { data };
     } catch (error) {
         console.error('Get profile error:', error);

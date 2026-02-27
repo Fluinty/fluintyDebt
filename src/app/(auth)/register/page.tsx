@@ -69,19 +69,17 @@ export default function RegisterPage() {
                 return;
             }
 
-            // Create profile record
+            // Create/update profile record (upsert handles case where auth user exists but profile doesn't)
             if (authData.user) {
-                const { error: profileError } = await supabase.from('profiles').insert({
+                const { error: profileError } = await supabase.from('profiles').upsert({
                     id: authData.user.id,
                     email: data.email,
                     full_name: data.fullName,
                     company_name: data.companyName,
-                });
+                }, { onConflict: 'id' });
 
                 if (profileError) {
                     console.error('Profile creation error:', profileError);
-                    // Don't block registration if profile creation fails
-                    // Profile can be completed later
                 }
             }
 

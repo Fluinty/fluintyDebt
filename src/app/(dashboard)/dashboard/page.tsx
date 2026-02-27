@@ -11,6 +11,8 @@ import {
     Edit,
     TrendingDown,
     Lock,
+    CreditCard,
+    Building2,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/utils/format-currency';
@@ -94,7 +96,7 @@ export default async function DashboardPage() {
 
     const actionItems: Array<{
         id: string;
-        type: 'missing_email' | 'ksef_not_configured';
+        type: 'missing_email' | 'ksef_not_configured' | 'missing_bank_account' | 'missing_company_name';
         title: string;
         description: string;
         link: string;
@@ -112,9 +114,35 @@ export default async function DashboardPage() {
             type: 'ksef_not_configured' as const,
             title: 'Skonfiguruj KSeF',
             description: 'Automatycznie importuj faktury',
-            link: '/settings',
+            link: '/settings?tab=integrations',
             icon: FileText,
             color: 'text-emerald-500',
+        });
+    }
+
+    // Add missing bank account warning
+    if (!profile?.bank_account_number) {
+        actionItems.unshift({
+            id: 'missing-bank-account',
+            type: 'missing_bank_account' as const,
+            title: 'Uzupełnij numer konta',
+            description: 'Wymagany do wysyłania wezwań płatności',
+            link: '/settings?tab=payments',
+            icon: CreditCard,
+            color: 'text-orange-500',
+        });
+    }
+
+    // Add missing company name warning
+    if (!profile?.company_name) {
+        actionItems.unshift({
+            id: 'missing-company-name',
+            type: 'missing_company_name' as const,
+            title: 'Uzupełnij dane firmy',
+            description: 'Nazwa firmy jest wymagana do wystawiania dokumentów',
+            link: '/settings',
+            icon: Building2,
+            color: 'text-red-500',
         });
     }
 
