@@ -742,7 +742,7 @@ export class KSeFClient {
 
         } catch (error) {
             console.error('[KSeF XAdES] Certificate auth failed:', error);
-            return null;
+            throw error; // Propagate real error message to caller
         }
     }
 
@@ -901,7 +901,7 @@ export class KSeFClient {
 
         } catch (error) {
             console.error('[KSeF Token] Session init failed:', error);
-            return null;
+            throw error; // Propagate real error message to caller
         }
     }
 
@@ -917,12 +917,14 @@ export class KSeFClient {
     }): Promise<KSeFInvoiceListResponse | null> {
         try {
             if (!this.session || !this.accessToken) {
-                await this.initSession();
+                const session = await this.initSession();
+                if (!session || !this.accessToken) {
+                    throw new Error('KSeF authentication failed - could not obtain access token. Check certificate, key and password.');
+                }
             }
 
             if (!this.accessToken) {
-                console.error('[KSeF] No access token available');
-                return null;
+                throw new Error('KSeF authentication failed - no access token available');
             }
 
             const dateFromStr = params.dateFrom.toISOString();

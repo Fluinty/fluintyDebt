@@ -568,14 +568,14 @@ export async function syncKSeFInvoices(
             const dateFrom = new Date();
             dateFrom.setDate(dateFrom.getDate() - daysBack);
 
-            // Fetch invoices from KSeF
+            // Fetch invoices from KSeF (throws on auth/API failure with real error message)
             const invoicesResponse = await client.fetchInvoices({
                 dateFrom: dateFrom,
                 dateTo: dateTo
             });
 
             if (!invoicesResponse) {
-                throw new Error('Failed to fetch invoices from KSeF');
+                throw new Error('KSeF nie zwrócił odpowiedzi na zapytanie o faktury');
             }
 
             invoicesFound = invoicesResponse.numberOfElements;
