@@ -80,7 +80,6 @@ const navigation: NavGroup[] = [
         title: "NARZĘDZIA",
         items: [
             { name: 'Historia', href: '/history', icon: History },
-            { name: 'Ustawienia', href: '/settings', icon: Settings },
         ],
     },
 ];

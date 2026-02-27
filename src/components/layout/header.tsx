@@ -16,6 +16,7 @@ import {
     Mail,
     AlertTriangle,
     CheckCircle,
+    Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -116,6 +117,14 @@ export function Header({ user, profile }: HeaderProps) {
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    {/* Settings icon */}
+                    <Button variant="ghost" size="icon" asChild className="hidden lg:flex">
+                        <Link href="/settings">
+                            <Settings className="h-5 w-5" />
+                            <span className="sr-only">Ustawienia</span>
+                        </Link>
+                    </Button>
 
                     {/* Dark mode toggle */}
                     <Button
