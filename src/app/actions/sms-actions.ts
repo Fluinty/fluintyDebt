@@ -270,7 +270,7 @@ export async function executeSMSStep(stepId: string, isSystemAction: boolean = f
     if (!canSend.allowed) {
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'skipped' })
+            .update({ status: 'failed' })
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
@@ -290,7 +290,7 @@ export async function executeSMSStep(stepId: string, isSystemAction: boolean = f
     if (!debtor?.phone) {
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'skipped' })
+            .update({ status: 'failed' })
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
@@ -449,7 +449,7 @@ export async function executeVoiceStep(stepId: string, isSystemAction: boolean =
     if (!canCall.allowed) {
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'skipped' })
+            .update({ status: 'failed' })
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({
@@ -469,7 +469,7 @@ export async function executeVoiceStep(stepId: string, isSystemAction: boolean =
     if (!debtor?.phone) {
         await supabase
             .from('scheduled_steps')
-            .update({ status: 'skipped' })
+            .update({ status: 'failed' })
             .eq('id', stepId);
 
         await supabase.from('collection_actions').insert({

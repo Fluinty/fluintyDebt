@@ -33,8 +33,8 @@ export default async function SchedulerPage() {
 
     const stepsList = scheduledSteps || [];
 
-    // Only show pending steps in scheduler
-    const pendingSteps = stepsList.filter(s => s.status === 'pending');
+    // Show pending and failed steps in scheduler so user can retry them
+    const pendingSteps = stepsList.filter(s => s.status === 'pending' || s.status === 'failed');
 
     // Calculate total steps per invoice for "Krok X/Y" display
     const stepsPerInvoice = stepsList.reduce((acc, step) => {
@@ -45,7 +45,7 @@ export default async function SchedulerPage() {
         acc[invoiceId].total++;
         if (step.status === 'executed' || step.status === 'skipped') {
             acc[invoiceId].executed++;
-        } else if (step.status === 'pending') {
+        } else if (step.status === 'pending' || step.status === 'failed') {
             acc[invoiceId].pending++;
         }
         return acc;
