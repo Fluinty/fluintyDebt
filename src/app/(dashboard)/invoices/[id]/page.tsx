@@ -145,6 +145,57 @@ export default async function InvoiceDetailsPage({ params }: { params: Promise<{
                         </CardContent>
                     </Card>
 
+                    {/* KSeF document view */}
+                    {(invoice as any).imported_from_ksef && (
+                        <Card className="border-blue-200 dark:border-blue-900">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="flex items-center gap-2 text-base">
+                                        <span className="text-blue-600 dark:text-blue-400">🏛️</span>
+                                        Dane z KSeF
+                                    </CardTitle>
+                                    {(invoice as any).ksef_number && (
+                                        <Badge variant="outline" className="font-mono text-xs">
+                                            {(invoice as any).ksef_number}
+                                        </Badge>
+                                    )}
+                                </div>
+                                {(invoice as any).ksef_import_date && (
+                                    <CardDescription>
+                                        Zaimportowano: {new Date((invoice as any).ksef_import_date).toLocaleString('pl-PL')}
+                                    </CardDescription>
+                                )}
+                            </CardHeader>
+                            <CardContent>
+                                <div className="rounded-lg border divide-y text-sm">
+                                    <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30">
+                                        <span className="text-muted-foreground">Nabywca</span>
+                                        <span className="font-medium">{invoice.debtors?.name || '—'}</span>
+                                    </div>
+                                    {invoice.debtors?.nip && (
+                                        <div className="grid grid-cols-2 px-4 py-2.5">
+                                            <span className="text-muted-foreground">NIP nabywcy</span>
+                                            <span className="font-mono">{invoice.debtors.nip}</span>
+                                        </div>
+                                    )}
+                                    <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30">
+                                        <span className="text-muted-foreground">Kwota netto</span>
+                                        <span className="font-medium">{invoice.amount_net ? formatCurrency(invoice.amount_net) : '—'}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 px-4 py-2.5">
+                                        <span className="text-muted-foreground">VAT {invoice.vat_rate ? `(${invoice.vat_rate}%)` : ''}</span>
+                                        <span className="font-medium">{invoice.vat_amount ? formatCurrency(invoice.vat_amount) : '—'}</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30 font-semibold">
+                                        <span>Kwota brutto</span>
+                                        <span className="text-emerald-600">{formatCurrency(invoice.amount_gross || invoice.amount)}</span>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+
                     {/* Sequence timeline */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">

@@ -93,6 +93,58 @@ export default async function CostDetailsPage(props: { params: Promise<{ id: str
                     {/* Reusing the fancy card for transfer details */}
                     <CostDetailsCard invoice={{ ...invoice, payment_status: displayStatus }} />
 
+                    {/* KSeF document view */}
+                    <Card className="border-blue-200 dark:border-blue-900">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <span className="text-blue-600 dark:text-blue-400">🏛️</span>
+                                    Dane z KSeF
+                                </CardTitle>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <div className="rounded-lg border divide-y text-sm mx-6 mb-6">
+                                <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30">
+                                    <span className="text-muted-foreground">Wystawca</span>
+                                    <span className="font-medium">{invoice.contractor_name}</span>
+                                </div>
+                                {invoice.contractor_nip && (
+                                    <div className="grid grid-cols-2 px-4 py-2.5">
+                                        <span className="text-muted-foreground">NIP wystawcy</span>
+                                        <span className="font-mono">{invoice.contractor_nip}</span>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30">
+                                    <span className="text-muted-foreground">Kwota netto</span>
+                                    <span className="font-medium">{invoice.amount_net ? formatCurrency(invoice.amount_net) : '—'}</span>
+                                </div>
+                                <div className="grid grid-cols-2 px-4 py-2.5">
+                                    <span className="text-muted-foreground">VAT {invoice.vat_rate ? `(${invoice.vat_rate}%)` : ''}</span>
+                                    <span className="font-medium">{invoice.vat_amount ? formatCurrency(invoice.vat_amount) : '—'}</span>
+                                </div>
+                                <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30 font-semibold">
+                                    <span>Kwota brutto</span>
+                                    <span className="text-red-600">{formatCurrency(invoice.amount_gross || invoice.amount)}</span>
+                                </div>
+                                {invoice.account_number && (
+                                    <div className="grid grid-cols-2 px-4 py-2.5">
+                                        <span className="text-muted-foreground">Nr konta</span>
+                                        <span className="font-mono text-xs break-all">{invoice.account_number}</span>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 px-4 py-2.5 bg-muted/30">
+                                    <span className="text-muted-foreground">Data wystawienia</span>
+                                    <span className="font-medium">{formatDate(invoice.issue_date)}</span>
+                                </div>
+                                <div className="grid grid-cols-2 px-4 py-2.5">
+                                    <span className="text-muted-foreground">Termin płatności</span>
+                                    <span className={`font-medium ${displayStatus === 'overdue' ? 'text-red-600' : ''}`}>{formatDate(invoice.due_date)}</span>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     {/* Additional Details (Description, Category) */}
                     <Card>
                         <CardHeader>
@@ -106,13 +158,6 @@ export default async function CostDetailsPage(props: { params: Promise<{ id: str
                                 <p className="text-sm text-muted-foreground mb-1">Kategoria</p>
                                 <div className="font-medium capitalize">{invoice.category || 'Inne'}</div>
                             </div>
-                            <div>
-                                <p className="text-sm text-muted-foreground mb-1">Data wystawienia</p>
-                                <div className="font-medium flex items-center gap-2">
-                                    <Calendar className="h-4 w-4 opacity-50" />
-                                    {formatDate(invoice.issue_date)}
-                                </div>
-                            </div>
                             {invoice.description && (
                                 <div className="md:col-span-2">
                                     <p className="text-sm text-muted-foreground mb-1">Opis / Notatki</p>
@@ -121,6 +166,7 @@ export default async function CostDetailsPage(props: { params: Promise<{ id: str
                             )}
                         </CardContent>
                     </Card>
+
                 </div>
 
                 {/* Sidebar (Right Column) */}
