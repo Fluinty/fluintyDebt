@@ -1,7 +1,8 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils/format-currency';
-import { ArrowDown, ArrowUp, CalendarDays } from 'lucide-react';
+import { ArrowDown, ArrowUp, CalendarDays, AlertTriangle } from 'lucide-react';
+import Link from 'next/link';
 
 interface Invoice {
     id: string;
@@ -18,7 +19,6 @@ interface UpcomingWeekProps {
 }
 
 export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps) {
-    // 1. Get next 7 days
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -26,7 +26,11 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
     nextWeek.setDate(nextWeek.getDate() + 7);
     nextWeek.setHours(23, 59, 59, 999);
 
-    // 2. Filter invoices
+    // ── Overdue (past due) ────────────────────────────────────────────────────
+    const overdueSales = salesInvoices.filter(inv => new Date(inv.due_date) < today);
+    const overdueCosts = costInvoices.filter(inv => new Date(inv.due_date) < today);
+
+    // ── Upcoming 7 days ───────────────────────────────────────────────────────
     const upcomingSales = salesInvoices.filter(inv => {
         const d = new Date(inv.due_date);
         return d >= today && d <= nextWeek;
@@ -37,30 +41,27 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
         return d >= today && d <= nextWeek;
     });
 
-    // 3. Group by date
+    // Group by date
     const groupedData: Record<string, { sales: Invoice[], costs: Invoice[] }> = {};
-
-    // Initialize next 7 days
     for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() + i);
         const dateStr = d.toISOString().split('T')[0];
         groupedData[dateStr] = { sales: [], costs: [] };
     }
-
-    // Fill data
     [...upcomingSales].forEach(inv => {
         const dateStr = new Date(inv.due_date).toISOString().split('T')[0];
         if (groupedData[dateStr]) groupedData[dateStr].sales.push(inv);
     });
-
     [...upcomingCosts].forEach(inv => {
         const dateStr = new Date(inv.due_date).toISOString().split('T')[0];
         if (groupedData[dateStr]) groupedData[dateStr].costs.push(inv);
     });
 
     const sortedDates = Object.keys(groupedData).sort();
-    const hasAnyData = upcomingSales.length > 0 || upcomingCosts.length > 0;
+    const hasAnyOverdue = overdueSales.length > 0 || overdueCosts.length > 0;
+    const hasAnyUpcoming = upcomingSales.length > 0 || upcomingCosts.length > 0;
+    const hasAnyData = hasAnyOverdue || hasAnyUpcoming;
 
     const formatDate = (dateStr: string) => {
         const date = new Date(dateStr);
@@ -68,11 +69,16 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
         if (dateStr === todayStr) return 'Dzisiaj';
         if (dateStr === tomorrowStr) return 'Jutro';
-
         return date.toLocaleDateString('pl-PL', { weekday: 'long', day: 'numeric', month: 'numeric' });
+    };
+
+    const daysOverdue = (dateStr: string) => {
+        const due = new Date(dateStr);
+        due.setHours(0, 0, 0, 0);
+        const diff = Math.floor((today.getTime() - due.getTime()) / 86400000);
+        return diff;
     };
 
     return (
@@ -87,10 +93,55 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
             <CardContent>
                 {!hasAnyData ? (
                     <div className="text-center py-8 text-muted-foreground">
-                        Brak nadchodzących płatności w tym tygodniu
+                        Brak nadchodzących płatności w tym tygodniu 🎉
                     </div>
                 ) : (
                     <div className="space-y-6">
+                        {/* ─── OVERDUE SECTION ─────────────────────────────── */}
+                        {hasAnyOverdue && (
+                            <div className="space-y-2">
+                                <h4 className="text-sm font-semibold text-red-600 dark:text-red-400 border-b border-red-200 dark:border-red-900 pb-1 flex items-center gap-1">
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                    Przeterminowane
+                                </h4>
+                                <div className="space-y-2">
+                                    {overdueSales.map(inv => (
+                                        <Link key={`od-sale-${inv.id}`} href={`/invoices/${inv.id}`}>
+                                            <div className="flex justify-between items-center text-sm p-2 rounded bg-red-50 dark:bg-red-950/30 border-l-2 border-red-600 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors">
+                                                <div className="truncate flex-1 mr-2">
+                                                    <div className="font-medium truncate">{inv.clientName}</div>
+                                                    <div className="text-xs text-red-500">FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie</div>
+                                                </div>
+                                                <div className="text-right whitespace-nowrap">
+                                                    <div className="font-semibold text-red-600 flex items-center justify-end gap-1">
+                                                        <ArrowDown className="h-3 w-3" />
+                                                        {formatCurrency(inv.amount_gross || inv.amount)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                    {overdueCosts.map(inv => (
+                                        <Link key={`od-cost-${inv.id}`} href={`/costs/${inv.id}`}>
+                                            <div className="flex justify-between items-center text-sm p-2 rounded bg-orange-50 dark:bg-orange-950/30 border-l-2 border-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-colors">
+                                                <div className="truncate flex-1 mr-2">
+                                                    <div className="font-medium truncate">{inv.clientName}</div>
+                                                    <div className="text-xs text-orange-600">FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie</div>
+                                                </div>
+                                                <div className="text-right whitespace-nowrap">
+                                                    <div className="font-semibold text-orange-600 flex items-center justify-end gap-1">
+                                                        <ArrowUp className="h-3 w-3" />
+                                                        {formatCurrency(inv.amount_gross || inv.amount)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ─── UPCOMING 7 DAYS ─────────────────────────────── */}
                         {sortedDates.map(dateStr => {
                             const { sales, costs } = groupedData[dateStr];
                             if (sales.length === 0 && costs.length === 0) return null;
@@ -102,32 +153,36 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
                                     </h4>
                                     <div className="space-y-2">
                                         {sales.map(inv => (
-                                            <div key={`sale-${inv.id}`} className="flex justify-between items-center text-sm p-2 rounded bg-emerald-50 dark:bg-emerald-950/20 border-l-2 border-emerald-500">
-                                                <div className="truncate flex-1 mr-2">
-                                                    <div className="font-medium truncate">{inv.clientName}</div>
-                                                    <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
-                                                </div>
-                                                <div className="text-right whitespace-nowrap">
-                                                    <div className="font-semibold text-emerald-600 flex items-center justify-end gap-1">
-                                                        <ArrowDown className="h-3 w-3" />
-                                                        {formatCurrency(inv.amount_gross || inv.amount)}
+                                            <Link key={`sale-${inv.id}`} href={`/invoices/${inv.id}`}>
+                                                <div className="flex justify-between items-center text-sm p-2 rounded bg-emerald-50 dark:bg-emerald-950/20 border-l-2 border-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
+                                                    <div className="truncate flex-1 mr-2">
+                                                        <div className="font-medium truncate">{inv.clientName}</div>
+                                                        <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
+                                                    </div>
+                                                    <div className="text-right whitespace-nowrap">
+                                                        <div className="font-semibold text-emerald-600 flex items-center justify-end gap-1">
+                                                            <ArrowDown className="h-3 w-3" />
+                                                            {formatCurrency(inv.amount_gross || inv.amount)}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            </Link>
                                         ))}
                                         {costs.map(inv => (
-                                            <div key={`cost-${inv.id}`} className="flex justify-between items-center text-sm p-2 rounded bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500">
-                                                <div className="truncate flex-1 mr-2">
-                                                    <div className="font-medium truncate">{inv.clientName}</div>
-                                                    <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
-                                                </div>
-                                                <div className="text-right whitespace-nowrap">
-                                                    <div className="font-semibold text-red-600 flex items-center justify-end gap-1">
-                                                        <ArrowUp className="h-3 w-3" />
-                                                        {formatCurrency(inv.amount_gross || inv.amount)}
+                                            <Link key={`cost-${inv.id}`} href={`/costs/${inv.id}`}>
+                                                <div className="flex justify-between items-center text-sm p-2 rounded bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors">
+                                                    <div className="truncate flex-1 mr-2">
+                                                        <div className="font-medium truncate">{inv.clientName}</div>
+                                                        <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
+                                                    </div>
+                                                    <div className="text-right whitespace-nowrap">
+                                                        <div className="font-semibold text-red-600 flex items-center justify-end gap-1">
+                                                            <ArrowUp className="h-3 w-3" />
+                                                            {formatCurrency(inv.amount_gross || inv.amount)}
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            </Link>
                                         ))}
                                     </div>
                                 </div>

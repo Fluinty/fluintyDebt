@@ -161,6 +161,21 @@ export default async function DashboardPage() {
         .filter(inv => inv.calculatedStatus === 'overdue' || inv.calculatedStatus === 'due_soon')
         .slice(0, 5);
 
+    // Overdue cost invoices (what user must pay)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysFromNow = new Date(today);
+    sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
+
+    const urgentCostInvoices = costInvoicesList
+        .filter(inv => {
+            if (inv.payment_status === 'paid') return false;
+            const due = new Date(inv.due_date);
+            due.setHours(0, 0, 0, 0);
+            return due <= sevenDaysFromNow; // overdue or due within 7 days
+        })
+        .slice(0, 5);
+
     // Prepare data for UpcomingWeek
     const upcomingSalesInvoices = showSales ? invoicesList
         .filter(inv => inv.calculatedStatus !== 'paid')
@@ -516,23 +531,45 @@ export default async function DashboardPage() {
                             </Link>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            {urgentInvoices.length > 0 ? (
-                                urgentInvoices.map((invoice) => (
-                                    <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
-                                        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                            {/* Sales — urgent */}
+                            {urgentInvoices.map((invoice) => (
+                                <Link key={invoice.id} href={`/invoices/${invoice.id}`}>
+                                    <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
+                                        <div>
+                                            <p className="font-medium">{invoice.invoice_number}</p>
+                                            <p className="text-xs text-muted-foreground">{(invoice.debtors as any)?.name} &middot; Sprzedaż</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
+                                            <StatusBadge status={invoice.calculatedStatus} />
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                            {/* Costs — urgent */}
+                            {showCosts && urgentCostInvoices.map((inv) => {
+                                const due = new Date(inv.due_date);
+                                due.setHours(0, 0, 0, 0);
+                                const isOverdue = due < today;
+                                return (
+                                    <Link key={inv.id} href={`/costs/${inv.id}`}>
+                                        <div className="flex items-center justify-between p-3 bg-red-50/50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
                                             <div>
-                                                <p className="font-medium">{invoice.invoice_number}</p>
-                                                <p className="text-sm text-muted-foreground">{(invoice.debtors as any)?.name}</p>
+                                                <p className="font-medium">{inv.invoice_number}</p>
+                                                <p className="text-xs text-muted-foreground">{inv.contractor_name} &middot; Koszt</p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
-                                                <StatusBadge status={invoice.calculatedStatus} />
+                                                <p className="font-bold text-red-600 dark:text-red-400">{formatCurrency(inv.amount)}</p>
+                                                <span className={`text-xs font-medium ${isOverdue ? 'text-red-600' : 'text-amber-600'}`}>
+                                                    {isOverdue ? 'Przeterminowana' : 'Wkrótce'}
+                                                </span>
                                             </div>
                                         </div>
                                     </Link>
-                                ))
-                            ) : (
-                                <p className="text-sm text-muted-foreground text-center py-4">Brak pilnych faktur</p>
+                                );
+                            })}
+                            {urgentInvoices.length === 0 && urgentCostInvoices.length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-4">Brak pilnych faktur 🎉</p>
                             )}
                         </CardContent>
                     </Card>
