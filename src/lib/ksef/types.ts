@@ -144,6 +144,7 @@ export interface KSeFParsedInvoice {
     grossTotal?: number;
     netTotal?: number;
     vatTotal?: number;
+    isPaid?: boolean;
 }
 
 // Helper types for UI

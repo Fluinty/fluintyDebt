@@ -4,14 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { getKSeFClientForUser } from '@/app/actions/ksef-actions';
 import { parseKSeFXml } from '@/lib/ksef/xml-parser';
 
-// Helper to decrypt token (same as in ksef-actions.ts)
-function decryptToken(encryptedToken: string): string {
-    if (encryptedToken.startsWith('v1:')) {
-        const encoded = encryptedToken.slice(3);
-        return Buffer.from(encoded, 'base64').toString('utf-8');
-    }
-    return encryptedToken;
-}
+
 
 /**
  * Sync cost invoices (purchase invoices) from KSeF
@@ -134,6 +127,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
             let bankAccountNumber: string | null = null;
             let bankName: string | null = null;
             let sellerAddressData: any = null;
+            let isPaid = false;
 
             // Fetch XML to get bank account and address details
             try {
@@ -141,6 +135,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
                 if (xmlContent) {
                     const parsed = parseKSeFXml(xmlContent);
                     sellerAddressData = parsed.seller; // Get full seller info
+                    isPaid = !!parsed.isPaid;
 
                     // Prefer seller specific bank account, fallback to global
                     if ((parsed.seller as any)?.bankAccountNumber) {
@@ -242,7 +237,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
                     amount: grossAmount,
                     currency: 'PLN', // KSeF is mostly PLN
                     account_number: bankAccountNumber,
-                    payment_status: 'to_pay',
+                    payment_status: isPaid ? 'paid' : 'to_pay',
                     category: 'other',
                 });
 

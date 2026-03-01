@@ -115,6 +115,10 @@ export function parseKSeFXml(xmlContent: string): KSeFParsedInvoice {
             + num(getText(root, 'P_13_6'))                 // Netto (0%)
             + num(getText(root, 'P_13_7'));                // Netto (zw.)
 
+        // ── Płatność ──
+        const zaplacono = getText(root, 'Zaplacono') || getText(root, 'ZnacznikZaplacono');
+        result.isPaid = zaplacono === '1' || zaplacono === 'true';
+
         // ── Line items (FaWiersz) ──
         const wiersze = getElements(root, 'FaWiersz');
         for (const wiersz of wiersze) {
