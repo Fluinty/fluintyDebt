@@ -1038,22 +1038,33 @@ export class KSeFClient {
 
             console.log(`[KSeF] Fetching XML for invoice: ${ksefReferenceNumber}`);
 
-            const response = await fetchWithTimeout(`${this.baseUrl}/common/invoice/${ksefReferenceNumber}`, {
-                method: 'GET',
-                headers: {
-                    'Accept': 'application/xml',
-                    'Authorization': `Bearer ${this.accessToken}`,
-                },
-            }, 30000);
+            // KSeF v2 endpoints to try in order
+            const endpoints = [
+                `${this.baseUrl}/invoices/${ksefReferenceNumber}`,
+                `${this.baseUrl}/invoices/download/${ksefReferenceNumber}`,
+                `${this.baseUrl}/common/invoice/${ksefReferenceNumber}`,
+            ];
 
-            if (!response.ok) {
-                console.error('[KSeF] Failed to get invoice XML:', response.status);
-                return null;
+            for (const url of endpoints) {
+                const response = await fetchWithTimeout(url, {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/xml, text/xml, */*',
+                        'Authorization': `Bearer ${this.accessToken}`,
+                    },
+                }, 30000);
+
+                if (response.ok) {
+                    const xml = await response.text();
+                    console.log(`[KSeF] XML downloaded from ${url}, length: ${xml.length}`);
+                    return xml;
+                }
+
+                console.warn(`[KSeF] ${url} returned ${response.status}, trying next...`);
             }
 
-            const xml = await response.text();
-            console.log(`[KSeF] XML downloaded, length: ${xml.length}`);
-            return xml;
+            console.error('[KSeF] All invoice XML endpoints returned errors');
+            return null;
 
         } catch (error) {
             console.error('[KSeF] Get invoice XML failed:', error);

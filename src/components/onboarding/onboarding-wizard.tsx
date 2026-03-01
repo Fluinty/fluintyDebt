@@ -460,18 +460,18 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             </div>
 
                                             <div className="space-y-2">
-                                                <Label>NIP</Label>
+                                                <Label>NIP <span className="text-red-500">*</span></Label>
                                                 <Input value={ksefNip} onChange={e => setKsefNip(e.target.value)} placeholder="NIP" />
                                             </div>
 
                                             {certFormat === 'pem' ? (
                                                 <div className="grid grid-cols-2 gap-4">
                                                     <div className="space-y-2">
-                                                        <Label>Certyfikat (.crt)</Label>
+                                                        <Label>Certyfikat (.crt) <span className="text-red-500">*</span></Label>
                                                         <Input type="file" accept=".crt,.pem,.cer" onChange={e => handleFileChange(e, 'cert')} />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <Label>Klucz prywatny (.key)</Label>
+                                                        <Label>Klucz prywatny (.key) <span className="text-red-500">*</span></Label>
                                                         <Input type="file" accept=".key,.pem" onChange={e => handleFileChange(e, 'key')} />
                                                     </div>
                                                 </div>
@@ -483,7 +483,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                             )}
 
                                             <div className="space-y-2">
-                                                <Label>Hasło do klucza (opcjonalne)</Label>
+                                                <Label>Hasło do klucza <span className="text-red-500">*</span></Label>
                                                 <div className="relative">
                                                     <Input
                                                         type={showPassword ? "text" : "password"}

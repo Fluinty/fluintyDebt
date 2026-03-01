@@ -395,7 +395,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
 
                     {/* NIP */}
                     <div className="space-y-2">
-                        <Label htmlFor="ksef_nip">NIP powiązany z KSeF</Label>
+                        <Label htmlFor="ksef_nip">NIP powiązany z KSeF <span className="text-red-500">*</span></Label>
                         <Input
                             id="ksef_nip"
                             value={formData.ksef_nip}
@@ -418,7 +418,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                         <div className="space-y-2">
                             <Label htmlFor="ksef_cert" className="flex items-center gap-2">
                                 <Upload className="h-4 w-4" />
-                                Certyfikat (Publiczny)
+                                Certyfikat (Publiczny) <span className="text-red-500">*</span>
                                 {isConfigured && settings?.ksef_cert_storage_path && (
                                     <Check className="h-4 w-4 text-green-500" />
                                 )}
@@ -437,7 +437,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                         <div className="space-y-2">
                             <Label htmlFor="ksef_key" className="flex items-center gap-2">
                                 <FileKey className="h-4 w-4" />
-                                Klucz Prywatny
+                                Klucz Prywatny <span className="text-red-500">*</span>
                                 {isConfigured && settings?.ksef_key_storage_path && (
                                     <Check className="h-4 w-4 text-green-500" />
                                 )}
@@ -458,7 +458,7 @@ export function KSeFSettingsCard({ companyNip }: KSeFSettingsCardProps) {
                     <div className="space-y-2">
                         <Label htmlFor="ksef_password" className="flex items-center gap-2">
                             <Shield className="h-4 w-4" />
-                            Hasło klucza prywatnego (opcjonalne)
+                            Hasło klucza prywatnego <span className="text-red-500">*</span>
                         </Label>
                         <div className="relative">
                             <Input
