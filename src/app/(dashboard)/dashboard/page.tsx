@@ -537,7 +537,9 @@ export default async function DashboardPage() {
                                     <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
                                         <div>
                                             <p className="font-medium">{invoice.invoice_number}</p>
-                                            <p className="text-xs text-muted-foreground">{(invoice.debtors as any)?.name} &middot; Sprzedaż</p>
+                                            <p className="text-xs text-muted-foreground">
+                                                <strong className="text-emerald-600 dark:text-emerald-400 mr-1">PRZYCHÓD</strong> &middot; {(invoice.debtors as any)?.name}
+                                            </p>
                                         </div>
                                         <div className="text-right">
                                             <p className="font-bold">{formatCurrency(invoice.amount_gross || invoice.amount)}</p>
@@ -556,7 +558,9 @@ export default async function DashboardPage() {
                                         <div className="flex items-center justify-between p-3 bg-red-50/50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-900/40 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
                                             <div>
                                                 <p className="font-medium">{inv.invoice_number}</p>
-                                                <p className="text-xs text-muted-foreground">{inv.contractor_name} &middot; Koszt</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    <strong className="text-red-600 dark:text-red-400 mr-1">KOSZT</strong> &middot; {inv.contractor_name}
+                                                </p>
                                             </div>
                                             <div className="text-right">
                                                 <p className="font-bold text-red-600 dark:text-red-400">{formatCurrency(inv.amount)}</p>

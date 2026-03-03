@@ -110,7 +110,10 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
                                             <div className="flex justify-between items-center text-sm p-2 rounded bg-red-50 dark:bg-red-950/30 border-l-2 border-red-600 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors">
                                                 <div className="truncate flex-1 mr-2">
                                                     <div className="font-medium truncate">{inv.clientName}</div>
-                                                    <div className="text-xs text-red-500">FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie</div>
+                                                    <div className="text-xs text-red-500">
+                                                        <strong className="text-red-700 dark:text-red-400 mr-2">PRZYCHÓD</strong>
+                                                        FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie
+                                                    </div>
                                                 </div>
                                                 <div className="text-right whitespace-nowrap">
                                                     <div className="font-semibold text-red-600 flex items-center justify-end gap-1">
@@ -126,7 +129,10 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
                                             <div className="flex justify-between items-center text-sm p-2 rounded bg-orange-50 dark:bg-orange-950/30 border-l-2 border-orange-500 hover:bg-orange-100 dark:hover:bg-orange-950/50 transition-colors">
                                                 <div className="truncate flex-1 mr-2">
                                                     <div className="font-medium truncate">{inv.clientName}</div>
-                                                    <div className="text-xs text-orange-600">FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie</div>
+                                                    <div className="text-xs text-orange-600">
+                                                        <strong className="text-orange-800 dark:text-orange-400 mr-2">KOSZT</strong>
+                                                        FV: {inv.invoice_number} · {daysOverdue(inv.due_date)} dni po terminie
+                                                    </div>
                                                 </div>
                                                 <div className="text-right whitespace-nowrap">
                                                     <div className="font-semibold text-orange-600 flex items-center justify-end gap-1">
@@ -157,7 +163,10 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
                                                 <div className="flex justify-between items-center text-sm p-2 rounded bg-emerald-50 dark:bg-emerald-950/20 border-l-2 border-emerald-500 hover:bg-emerald-100 dark:hover:bg-emerald-950/40 transition-colors">
                                                     <div className="truncate flex-1 mr-2">
                                                         <div className="font-medium truncate">{inv.clientName}</div>
-                                                        <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            <strong className="text-emerald-600 dark:text-emerald-400 mr-2">PRZYCHÓD</strong>
+                                                            FV: {inv.invoice_number}
+                                                        </div>
                                                     </div>
                                                     <div className="text-right whitespace-nowrap">
                                                         <div className="font-semibold text-emerald-600 flex items-center justify-end gap-1">
@@ -173,7 +182,10 @@ export function UpcomingWeek({ salesInvoices, costInvoices }: UpcomingWeekProps)
                                                 <div className="flex justify-between items-center text-sm p-2 rounded bg-red-50 dark:bg-red-950/20 border-l-2 border-red-500 hover:bg-red-100 dark:hover:bg-red-950/40 transition-colors">
                                                     <div className="truncate flex-1 mr-2">
                                                         <div className="font-medium truncate">{inv.clientName}</div>
-                                                        <div className="text-xs text-muted-foreground">FV: {inv.invoice_number}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            <strong className="text-red-500 dark:text-red-400 mr-2">KOSZT</strong>
+                                                            FV: {inv.invoice_number}
+                                                        </div>
                                                     </div>
                                                     <div className="text-right whitespace-nowrap">
                                                         <div className="font-semibold text-red-600 flex items-center justify-end gap-1">
