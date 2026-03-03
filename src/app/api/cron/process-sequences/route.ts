@@ -53,7 +53,6 @@ export async function GET(request: NextRequest) {
         .eq('status', 'pending')
         .lte('scheduled_for', today)
         .eq('invoices.auto_send_enabled', true)
-        .lte('invoices.send_time', currentTime)
         .not('invoices.status', 'in', '(paid,written_off)');
 
     if (error) {
