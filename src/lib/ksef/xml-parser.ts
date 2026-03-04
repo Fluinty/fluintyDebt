@@ -116,8 +116,32 @@ export function parseKSeFXml(xmlContent: string): KSeFParsedInvoice {
             + num(getText(root, 'P_13_7'));                // Netto (zw.)
 
         // ── Płatność ──
-        const zaplacono = getText(root, 'Zaplacono') || getText(root, 'ZnacznikZaplacono');
-        result.isPaid = zaplacono === '1' || zaplacono === 'true';
+        // Zaplacono is inside <Fa><Platnosc><Zaplacono> per FA(3) schema.
+        // We try multiple strategies to handle various XML namespace prefixes.
+        let isPaid = false;
+
+        // Strategy 1: Look inside <Platnosc> block
+        const platnocBlocks = getElements(root, 'Platnosc');
+        if (platnocBlocks.length > 0) {
+            const zaplaconoVal = getText(platnocBlocks[0] as Element, 'Zaplacono');
+            if (zaplaconoVal === '1' || zaplaconoVal === 'true') isPaid = true;
+        }
+
+        // Strategy 2: Try getText globally from DOM (handles some namespace cases)
+        if (!isPaid) {
+            const zaplaconoGlobal = getText(root, 'Zaplacono') || getText(root, 'ZnacznikZaplacono');
+            if (zaplaconoGlobal === '1' || zaplaconoGlobal === 'true') isPaid = true;
+        }
+
+        // Strategy 3: Raw regex scan on the XML string (bulletproof fallback for any namespace prefix)
+        if (!isPaid) {
+            // Matches <Zaplacono>1</Zaplacono>, <tns:Zaplacono>1</tns:Zaplacono>, etc.
+            const zaplaconoRegex = /<[^:>]*:?Zaplacono[^>]*>[\s]*1[\s]*<\/[^:>]*:?Zaplacono>/i;
+            if (zaplaconoRegex.test(xmlContent)) isPaid = true;
+        }
+
+        result.isPaid = isPaid;
+        if (isPaid) console.log('[KSeF XML Parser] Invoice marked as PAID (Zaplacono=1 detected)');
 
         // ── Line items (FaWiersz) ──
         const wiersze = getElements(root, 'FaWiersz');
