@@ -728,6 +728,22 @@ export async function syncKSeFInvoices(
                 // Use ksefNumber (2.0) or ksefReferenceNumber (1.0)
                 const ksefNumber = invoiceHeader.ksefNumber || invoiceHeader.ksefReferenceNumber || ksefRef;
 
+                // NEW: Fetch XML before insertion to get payment status and items
+                let isPaid = false;
+                let parsedItems: any[] = [];
+                try {
+                    console.log(`[Sync] Waiting 1s before fetching XML for ${ksefNumber}...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000)); // Respect KSeF rate limits
+                    const xmlContent = await client.getInvoiceXml(ksefNumber);
+                    if (xmlContent) {
+                        const parsed = parseKSeFXml(xmlContent);
+                        isPaid = !!parsed.isPaid;
+                        parsedItems = parsed.items || [];
+                    }
+                } catch (xmlError) {
+                    console.error(`[Sync] Failed to fetch/parse XML for ${ksefNumber}:`, xmlError);
+                }
+
                 const { data: newInvoice, error: invoiceError } = await supabase
                     .from('invoices')
                     .insert({
@@ -741,7 +757,8 @@ export async function syncKSeFInvoices(
                         vat_amount: vatAmount,
                         issue_date: invoiceHeader.invoicingDate,
                         due_date: dueDate.toISOString().split('T')[0],
-                        status: 'pending',
+                        status: isPaid ? 'paid' : 'pending',
+                        paid_at: isPaid ? new Date().toISOString() : null,
                         ksef_number: ksefNumber,
                         ksef_status: settings.auto_confirm_invoices ? 'confirmed' : 'pending_confirmation',
                         imported_from_ksef: true,
@@ -756,30 +773,22 @@ export async function syncKSeFInvoices(
                     console.log('[Sync] Inserted invoice:', ksefNumber);
                     invoicesImported++;
 
-                    // NEW: Fetch and parse XML to get invoice items
-                    try {
-                        const xmlContent = await client.getInvoiceXml(ksefNumber);
-                        if (xmlContent) {
-                            const { items } = parseKSeFXml(xmlContent);
-                            if (items.length > 0) {
-                                console.log(`[Sync] Found ${items.length} items for invoice ${ksefNumber}`);
-                                const itemsToInsert = items.map(item => ({
-                                    invoice_id: newInvoice.id,
-                                    description: item.description,
-                                    quantity: item.quantity,
-                                    unit_price_net: item.unitPriceNet,
-                                    unit_price_gross: item.unitPriceGross,
-                                    vat_rate: item.vatRate,
-                                    total_net: item.totalNet,
-                                    total_gross: item.totalGross,
-                                    unit: item.unit
-                                }));
+                    // Insert invoice items from previously parsed XML
+                    if (parsedItems.length > 0) {
+                        console.log(`[Sync] Found ${parsedItems.length} items for invoice ${ksefNumber}`);
+                        const itemsToInsert = parsedItems.map(item => ({
+                            invoice_id: newInvoice.id,
+                            description: item.description,
+                            quantity: item.quantity,
+                            unit_price_net: item.unitPriceNet,
+                            unit_price_gross: item.unitPriceGross,
+                            vat_rate: item.vatRate,
+                            total_net: item.totalNet,
+                            total_gross: item.totalGross,
+                            unit: item.unit
+                        }));
 
-                                await supabase.from('invoice_items').insert(itemsToInsert);
-                            }
-                        }
-                    } catch (xmlError) {
-                        console.error(`[Sync] Failed to fetch/parse XML for ${ksefNumber}:`, xmlError);
+                        await supabase.from('invoice_items').insert(itemsToInsert);
                     }
 
                     // Generate scheduled steps if invoice has a sequence assigned

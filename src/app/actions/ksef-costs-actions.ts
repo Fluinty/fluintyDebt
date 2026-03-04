@@ -129,8 +129,10 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
             let sellerAddressData: any = null;
             let isPaid = false;
 
-            // Fetch XML to get bank account and address details
+            // Fetch XML to get bank account, address details, and payment status (Zaplacono)
             try {
+                console.log(`[Costs] Waiting 1s before fetching XML for ${ksefRef}...`);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Respect KSeF rate limits
                 const xmlContent = await client.getInvoiceXml(ksefRef);
                 if (xmlContent) {
                     const parsed = parseKSeFXml(xmlContent);
