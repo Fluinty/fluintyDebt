@@ -35,7 +35,6 @@ const VariableList = () => (
                 { label: 'Termin', value: '{{due_date}}' },
                 { label: 'Dni po terminie', value: '{{days_overdue}}' },
                 { label: 'Twoja firma', value: '{{company_name}}' },
-                { label: 'Link', value: '{{payment_link}}' },
             ].map((v) => (
                 <Badge
                     key={v.value}
@@ -469,13 +468,6 @@ export default function NewSequencePage() {
                                         </Tabs>
 
                                         <div className="flex flex-wrap gap-6 pt-4 border-t mt-4">
-                                            <div className="flex items-center gap-2">
-                                                <Switch
-                                                    checked={selectedStep.include_payment_link}
-                                                    onCheckedChange={(v) => updateSelectedStep({ include_payment_link: v })}
-                                                />
-                                                <Label>Dołącz link do płatności</Label>
-                                            </div>
                                             <div className="flex items-center gap-2 opacity-50">
                                                 <Switch
                                                     checked={false}
