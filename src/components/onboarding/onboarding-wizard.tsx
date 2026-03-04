@@ -557,21 +557,21 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps) {
                                 {[
                                     {
                                         id: 'gentle',
-                                        name: 'Windykacja Łagodna',
-                                        desc: '7 kroków przez 45 dni, nastawiona na utrzymanie relacji',
-                                        steps: '0d, +2d, +7d, +15d, +30d (SMS), +30d, +45d',
+                                        name: 'Łagodna',
+                                        desc: '3 kroki przez 30 dni – dla klientów VIP i dobrych płatników',
+                                        steps: '+3d (Email), +14d (Email), +30d (Email)',
                                     },
                                     {
                                         id: 'standard',
-                                        name: 'Windykacja Standardowa',
-                                        desc: '6 kroków przez 35 dni, najczęściej wybierana',
-                                        steps: '+1d, +5d, +12d, +22d (Email+SMS), +35d',
+                                        name: 'Standardowa',
+                                        desc: '5 kroków przez 30 dni – domyślna dla większości kontrahentów',
+                                        steps: '+1d, +7d, +14d (Email+SMS), +30d',
                                     },
                                     {
                                         id: 'quick',
                                         name: 'Szybka Eskalacja',
-                                        desc: '4 kroki przez 14 dni, dla ryzykownych klientów',
-                                        steps: '+1d, +7d (Email+SMS), +14d',
+                                        desc: '7 kroków przez 30 dni – intensywna, dla trudnych kontrahentów',
+                                        steps: '+1d, +3d, +7d, +14d (Email+SMS), +21d, +30d',
                                     },
                                 ].map((seq) => (
                                     <div
