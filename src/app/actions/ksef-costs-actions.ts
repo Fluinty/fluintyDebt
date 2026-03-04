@@ -103,6 +103,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
 
             // Extract Seller Data (Subject1)
             const invData = invoiceHeader as unknown as Record<string, unknown>;
+
             const sellerNip = invoiceHeader.seller?.nip ||
                 (invData.subjectBy as any)?.issuedByIdentifier?.identifier ||
                 (invData.seller as any)?.nip;
@@ -123,38 +124,12 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
             const dueDate = new Date(invoiceDate);
             dueDate.setDate(dueDate.getDate() + 14);
 
+            // KSeF v2 does not allow downloading XML for Subject2 (purchase) invoices directly.
+            // Users must manually mark cost invoices as paid after completing the bank transfer.
             // Prepare insert data
             let bankAccountNumber: string | null = null;
             let bankName: string | null = null;
             let sellerAddressData: any = null;
-            let isPaid = false;
-
-            // Fetch XML to get bank account, address details, and payment status (Zaplacono)
-            try {
-                console.log(`[Costs] Waiting 1s before fetching XML for ${ksefRef}...`);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Respect KSeF rate limits
-                const xmlContent = await client.getInvoiceXml(ksefRef);
-                if (xmlContent) {
-                    const parsed = parseKSeFXml(xmlContent);
-                    sellerAddressData = parsed.seller; // Get full seller info
-                    isPaid = !!parsed.isPaid;
-
-                    // Prefer seller specific bank account, fallback to global
-                    if ((parsed.seller as any)?.bankAccountNumber) {
-                        bankAccountNumber = (parsed.seller as any).bankAccountNumber;
-                        bankName = (parsed.seller as any).bankName || (parsed as any).bankName || null;
-                    } else if ((parsed as any).bankAccountNumber) {
-                        bankAccountNumber = (parsed as any).bankAccountNumber;
-                        bankName = (parsed as any).bankName || null;
-                    }
-
-                    if (bankAccountNumber) {
-                        console.log('[Costs] Found bank account:', bankAccountNumber);
-                    }
-                }
-            } catch (xmlError) {
-                console.error('[Costs] Failed to fetch XML:', xmlError);
-            }
 
             // AUTO-CREATE VENDOR OR UPDATE BANK ACCOUNT/ADDRESS
             if (sellerNip) {
@@ -239,7 +214,7 @@ export async function syncKSeFCostInvoices(daysBack: number = 7, maxInvoices?: n
                     amount: grossAmount,
                     currency: 'PLN', // KSeF is mostly PLN
                     account_number: bankAccountNumber,
-                    payment_status: isPaid ? 'paid' : 'to_pay',
+                    payment_status: 'to_pay', // Cost invoices start as unpaid; user marks paid after bank transfer
                     category: 'other',
                 });
 

@@ -1038,7 +1038,9 @@ export class KSeFClient {
 
             console.log(`[KSeF] Fetching XML for invoice: ${ksefReferenceNumber}`);
 
-            // KSeF v2 endpoints to try in order
+            // KSeF v2 endpoints to try for invoice XML download
+            // NOTE: Subject2 (purchase) invoices can only be downloaded via async /invoices/exports
+            // Direct download only works for Subject1 (issued) invoices
             const endpoints = [
                 `${this.baseUrl}/invoices/${ksefReferenceNumber}`,
                 `${this.baseUrl}/invoices/download/${ksefReferenceNumber}`,
@@ -1049,7 +1051,7 @@ export class KSeFClient {
                 const response = await fetchWithTimeout(url, {
                     method: 'GET',
                     headers: {
-                        'Accept': 'application/xml, text/xml, */*',
+                        'Accept': 'application/xml',
                         'Authorization': `Bearer ${this.accessToken}`,
                     },
                 }, 30000);
